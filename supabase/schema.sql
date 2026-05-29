@@ -22,6 +22,7 @@ create table if not exists tasks (
   assignee_id text,
   status text default 'todo',
   due_date text,
+  progress text,                     -- 진행률(%)
   created_at timestamptz default now(),
   updated_at timestamptz
 );
@@ -100,6 +101,7 @@ create table if not exists reports (
   date text,
   kind text default 'daily',         -- daily | weekly
   period text,                       -- 주간 보고 기간 표시
+  progress text,                     -- 주간 진행률(%)
   member_id text,
   done text,
   todo text,
@@ -114,6 +116,7 @@ create table if not exists goals (
   status text default 'doing',       -- planned | doing | done | hold
   title text not null,
   weight text,                       -- 비중(%) 숫자 문자열
+  progress text,                     -- 진행률(%)
   metric text,                       -- 평가지표
   plan text,                         -- 실행계획
   grade text,                        -- 평가등급: 미평가 | S | A | B | C

@@ -491,6 +491,15 @@ a { color: inherit; }
   }
 }
 
+/* ===== 진행률 바 ===== */
+.progress { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.progress-label { font-size: 11px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.progress-track { flex: 1; height: 8px; background: #e8edf3; border-radius: 999px; overflow: hidden; min-width: 50px; }
+.progress-track span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #34d399, #16a34a); transition: width .3s; }
+.progress.full .progress-track span { background: linear-gradient(90deg, #22c55e, #15803d); }
+.progress-num { font-size: 12px; font-weight: 800; color: #15803d; white-space: nowrap; min-width: 34px; text-align: right; }
+.pt-pct { font-size: 12px; font-weight: 800; color: #15803d; white-space: nowrap; }
+
 /* ===== 색상 선택 ===== */
 .color-picker { display: flex; flex-wrap: wrap; gap: 10px; padding: 2px; }
 .swatch {

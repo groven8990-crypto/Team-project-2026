@@ -481,6 +481,11 @@ function personTaskRow(t) {
           ? `<span class="pt-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date)}</span>`
           : ""
       }
+      ${
+        t.status !== "done" && t.progress && parseInt(t.progress) > 0
+          ? `<span class="pt-pct">${parseInt(t.progress)}%</span>`
+          : ""
+      }
       <span class="pt-lead"></span>
       <span class="pt-status status-${t.status}">${meta.label}</span>
       <span class="pt-actions">
@@ -504,6 +509,11 @@ function taskCard(t) {
         ${UI.memberChip(t.assignee_id)}
       </div>
       ${t.detail ? `<p class="card-desc">${UI.nl2br(t.detail)}</p>` : ""}
+      ${
+        t.status === "done" || (t.progress && parseInt(t.progress) > 0)
+          ? progressBar(t.status === "done" ? 100 : t.progress)
+          : ""
+      }
       <div class="card-meta">
         ${
           t.due_date
@@ -543,6 +553,7 @@ async function taskForm(existing) {
         options: TASK_STATUS.map((s) => ({ value: s.key, label: s.label })),
       },
       { name: "due_date", label: "마감일", type: "date" },
+      { name: "progress", label: "진행률 (%)", type: "text", placeholder: "예: 50" },
     ],
   });
   if (!res) return;
@@ -566,6 +577,14 @@ function statusBadge(key) {
 function weightBar(w) {
   const n = Math.max(0, Math.min(100, parseInt(w, 10) || 0));
   return `<div class="weight"><div class="weight-bar"><span style="width:${n}%"></span></div><span class="weight-num">${n}%</span></div>`;
+}
+/* 진행률 바 (녹색). label 옵션으로 앞에 라벨 표시 */
+function progressBar(v, label) {
+  const n = Math.max(0, Math.min(100, parseInt(v, 10) || 0));
+  const cls = n >= 100 ? " full" : "";
+  return `<div class="progress${cls}">${
+    label ? `<span class="progress-label">${label}</span>` : ""
+  }<div class="progress-track"><span style="width:${n}%"></span></div><span class="progress-num">${n}%</span></div>`;
 }
 function gradeBadge(g) {
   if (!g || g === "미평가") return `<span class="grade none">미평가</span>`;
@@ -609,7 +628,8 @@ function goalsTable() {
         <td class="ta-c"><span class="year-tag">${UI.esc(g.year || "-")}</span></td>
         <td>${statusBadge(g.status)}</td>
         <td><strong>${UI.esc(g.title)}</strong></td>
-        <td style="min-width:120px">${weightBar(g.weight)}</td>
+        <td style="min-width:110px">${weightBar(g.weight)}</td>
+        <td style="min-width:120px">${progressBar(g.status === "done" ? 100 : g.progress)}</td>
         <td class="ta-l">${g.metric ? UI.nl2br(g.metric) : "<span class='muted'>-</span>"}</td>
         <td>${UI.memberChip(g.member_id)}</td>
         <td class="ta-c">${gradeBadge(g.grade)}</td>
@@ -626,7 +646,7 @@ function goalsTable() {
       <table class="goal-table">
         <thead>
           <tr>
-            <th>대상년도</th><th>상태</th><th>중점추진과제</th><th>비중</th>
+            <th>대상년도</th><th>상태</th><th>중점추진과제</th><th>비중</th><th>진행률</th>
             <th class="ta-l">평가지표</th><th>담당</th><th>평가</th><th></th>
           </tr>
         </thead>
@@ -661,6 +681,7 @@ function goalCard(g) {
         ${gradeBadge(g.grade)}
       </div>
       ${weightBar(g.weight)}
+      ${progressBar(g.status === "done" ? 100 : g.progress, "진행률")}
       ${g.plan ? `<p class="card-desc"><b class="lbl">실행계획</b> ${UI.nl2br(g.plan)}</p>` : ""}
       ${g.metric ? `<p class="card-desc"><b class="lbl">평가지표</b> ${UI.nl2br(g.metric)}</p>` : ""}
       <div class="card-meta">
@@ -695,6 +716,7 @@ async function goalForm(existing) {
         options: GOAL_STATUS.map((s) => ({ value: s.key, label: s.label })),
       },
       { name: "weight", label: "비중 (%)", type: "text", placeholder: "예: 30" },
+      { name: "progress", label: "진행률 (%)", type: "text", placeholder: "예: 60" },
       {
         name: "member_id",
         label: "담당자",
@@ -1679,6 +1701,7 @@ function weeklyCard(r) {
         <strong>🗓️ ${UI.esc(r.period || UI.fmtDate(r.date))} 주간 보고</strong>
         ${UI.memberChip(r.member_id)}
       </div>
+      ${r.progress ? progressBar(r.progress, "주간 진행률") : ""}
       ${r.done ? `<div class="report-row"><b>이번 주 한 일</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
       ${r.todo ? `<div class="report-row"><b>다음 주 계획</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
       ${r.note ? `<div class="report-row"><b>이슈 / 건의</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
@@ -1798,6 +1821,7 @@ async function weeklyReportForm(existing, preset) {
         options: UI.memberOptions(false),
       },
       { name: "period", label: "기간", type: "text", placeholder: "예: 2026.05.26 ~ 05.30" },
+      { name: "progress", label: "주간 진행률 (%)", type: "text", placeholder: "예: 80" },
       { name: "done", label: "이번 주 한 일 (주요 실적)", type: "textarea", rows: 6, full: true },
       { name: "todo", label: "다음 주 계획", type: "textarea", rows: 5, full: true },
       { name: "note", label: "이슈 / 건의사항", type: "textarea", rows: 3, full: true },
@@ -1868,6 +1892,11 @@ function reportSheetHTML(r) {
       <div class="rs-meta">
         <div><span>${periodLabel}</span><b>${periodVal}</b></div>
         <div><span>작성자</span><b>${UI.esc(UI.memberName(r.member_id))}</b></div>
+        ${
+          weekly && r.progress
+            ? `<div><span>진행률</span><b>${parseInt(r.progress) || 0}%</b></div>`
+            : ""
+        }
       </div>
       <section><h3>${s1}</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
       <section><h3>${s2}</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
