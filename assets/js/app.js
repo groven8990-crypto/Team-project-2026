@@ -40,6 +40,7 @@ const App = {
     kptMineOnly: false,
     calendarRef: new Date(),
     taskMember: "all", // 대시보드 멤버 필터: all | mine | <memberId>
+    taskView: "people", // 대시보드 보기: kanban | people
     goalView: "table", // 업무 목표 보기: table | board
     docSelectedId: null, // 선택한 업무 문서
     docSearch: "", // 문서 검색어
@@ -384,16 +385,109 @@ function renderDashboard() {
       </div>`;
   }).join("");
 
+  const view = App.state.taskView;
+  const toggle = `
+    <div class="view-toggle">
+      <button class="vt ${view === "people" ? "active" : ""}" data-act="task-view" data-view="people">👥 사람별 보기</button>
+      <button class="vt ${view === "kanban" ? "active" : ""}" data-act="task-view" data-view="kanban">▢ 칸반 보기</button>
+    </div>`;
+
+  const body =
+    view === "people"
+      ? dashboardPeople(allTasks)
+      : `${filterBar}<div class="kanban">${columns}</div>`;
+
   return `
     <section class="view">
       <div class="view-head">
         <h2>할일 대시보드</h2>
         <button class="btn primary" data-act="task-add">+ 할 일 추가</button>
       </div>
-      ${filterBar}
+      ${toggle}
       ${stats}
-      <div class="kanban">${columns}</div>
+      ${body}
     </section>`;
+}
+
+/* 사람별 보기: 멤버마다 본인 할일을 한 줄씩 모아서 표시 */
+function dashboardPeople(allTasks) {
+  const me = curUser();
+  const members = Store.list("members")
+    .slice()
+    .sort((a, b) => {
+      if (a.id === me) return -1; // 본인을 맨 위로
+      if (b.id === me) return 1;
+      return 0;
+    });
+
+  // 미지정(담당자 없음/삭제된 멤버) 그룹
+  const memberIds = new Set(members.map((m) => m.id));
+  const orphan = allTasks.filter((t) => !memberIds.has(t.assignee_id));
+
+  const sections = [];
+
+  members.forEach((m) => {
+    const mine = allTasks.filter((t) => t.assignee_id === m.id);
+    sections.push(personSection(m.name, m.color, m.id, mine, m.id === me));
+  });
+  if (orphan.length) sections.push(personSection("미지정", "#94a3b8", null, orphan, false));
+
+  if (!members.length && !orphan.length)
+    return `<div class="empty">멤버를 등록하고 할 일을 추가해보세요.</div>`;
+
+  return `<div class="people-list">${sections.join("")}</div>`;
+}
+
+function personSection(name, color, memberId, tasks, isMe) {
+  const order = { doing: 0, todo: 1, done: 2 };
+  const sorted = tasks
+    .slice()
+    .sort(
+      (a, b) =>
+        (order[a.status] - order[b.status]) ||
+        (a.due_date || "9999").localeCompare(b.due_date || "9999")
+    );
+  const doing = tasks.filter((t) => t.status === "doing").length;
+  const todo = tasks.filter((t) => t.status === "todo").length;
+  const done = tasks.filter((t) => t.status === "done").length;
+
+  const rows = sorted.length
+    ? sorted.map((t) => personTaskRow(t)).join("")
+    : `<div class="empty-mini">담당 할 일이 없습니다</div>`;
+
+  return `
+    <div class="person-block">
+      <div class="person-head">
+        <span class="chip" style="--c:${UI.esc(color || "#64748b")}">${UI.esc(name)}</span>
+        ${isMe ? `<span class="chip chip-me">나</span>` : ""}
+        <span class="person-counts">진행 ${doing} · 할일 ${todo} · 완료 ${done}</span>
+      </div>
+      <div class="person-tasks">${rows}</div>
+    </div>`;
+}
+
+function personTaskRow(t) {
+  const meta = TASK_STATUS.find((s) => s.key === t.status) || TASK_STATUS[0];
+  const overdue = t.status !== "done" && t.due_date && t.due_date < UI.todayInput();
+  const next = t.status === "todo" ? "doing" : t.status === "doing" ? "done" : "todo";
+  const nextLabel = t.status === "todo" ? "▶" : t.status === "doing" ? "✓" : "↺";
+  return `
+    <div class="ptask ${t.status === "done" ? "is-done" : ""}">
+      <span class="pt-dot status-${t.status}"></span>
+      <span class="pt-title">${UI.esc(t.title)}</span>
+      ${
+        t.due_date
+          ? `<span class="pt-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date)}</span>`
+          : ""
+      }
+      <span class="pt-lead"></span>
+      <span class="pt-status status-${t.status}">${meta.label}</span>
+      <span class="pt-actions">
+        <button class="btn xs primary" data-act="task-move" data-id="${t.id}" data-to="${next}">${nextLabel}</button>
+        <button class="btn xs ghost" data-act="task-edit" data-id="${t.id}">수정</button>
+        <button class="btn xs danger" data-act="task-del" data-id="${t.id}">삭제</button>
+      </span>
+    </div>`;
 }
 
 function taskCard(t) {
@@ -1702,6 +1796,10 @@ async function handleAction(act, el) {
 
   switch (act) {
     // 할일
+    case "task-view":
+      App.state.taskView = el.getAttribute("data-view");
+      render();
+      return;
     case "task-filter":
       App.state.taskMember = el.getAttribute("data-member");
       render();

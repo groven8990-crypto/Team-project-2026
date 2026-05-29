@@ -90,6 +90,17 @@ const UI = (function () {
       const form = document.createElement("form");
       form.className = "modal-body";
 
+      function itemRowHTML(r) {
+        r = r || {};
+        return `<div class="item-row">
+          <input class="ir-agenda" placeholder="안건 및 결과" value="${esc(r.agenda || "")}">
+          <input class="ir-owner" placeholder="담당(부서/자)" value="${esc(r.owner || "")}">
+          <input class="ir-due" type="date" value="${esc(r.due || "")}">
+          <label class="ir-done"><input type="checkbox" ${r.done ? "checked" : ""}></label>
+          <button type="button" class="icon-btn ir-del" title="행 삭제">✕</button>
+        </div>`;
+      }
+
       const inputs = {};
       fields.forEach((f) => {
         const wrap = document.createElement("div");
@@ -127,6 +138,13 @@ const UI = (function () {
                    <div class="img-preview" id="${id}_preview">${
             initial ? `<img src="${esc(initial)}">` : ""
           }</div>`;
+        } else if (f.type === "items") {
+          const rows = Array.isArray(initial) && initial.length ? initial : [{}];
+          html += `<div class="items-editor" id="${id}">
+            <div class="items-head"><span>안건 및 결과</span><span>담당</span><span>기한</span><span>완료</span><span></span></div>
+            ${rows.map((r) => itemRowHTML(r)).join("")}
+            <button type="button" class="btn ghost sm add-item-row" data-target="${id}">+ 행 추가</button>
+          </div>`;
         } else {
           const t = f.type === "date" ? "date" : f.type === "url" ? "url" : "text";
           html += `<input id="${id}" name="${f.name}" type="${t}" placeholder="${esc(
@@ -180,6 +198,18 @@ const UI = (function () {
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
+      // 안건 행 추가/삭제
+      form.addEventListener("click", (e) => {
+        const add = e.target.closest(".add-item-row");
+        if (add) {
+          const editor = form.querySelector("#" + add.getAttribute("data-target"));
+          add.insertAdjacentHTML("beforebegin", itemRowHTML({}));
+          return;
+        }
+        const del = e.target.closest(".ir-del");
+        if (del) del.closest(".item-row").remove();
+      });
+
       const first = form.querySelector("input,textarea,select");
       if (first) setTimeout(() => first.focus(), 50);
 
@@ -206,6 +236,18 @@ const UI = (function () {
           if (f.type === "static") continue;
           if (f.type === "image") {
             out[f.name] = imageData[f.name] || "";
+            continue;
+          }
+          if (f.type === "items") {
+            const editor = form.querySelector(`#f_${f.name}`);
+            out[f.name] = [...editor.querySelectorAll(".item-row")]
+              .map((row) => ({
+                agenda: row.querySelector(".ir-agenda").value.trim(),
+                owner: row.querySelector(".ir-owner").value.trim(),
+                due: row.querySelector(".ir-due").value,
+                done: row.querySelector(".ir-done input").checked,
+              }))
+              .filter((x) => x.agenda || x.owner);
             continue;
           }
           const el = form.querySelector(`#f_${f.name}`);
