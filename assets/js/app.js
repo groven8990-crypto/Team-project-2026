@@ -29,6 +29,7 @@ const App = {
     databoardTab: "resources",
     kptMineOnly: false,
     calendarRef: new Date(),
+    taskMember: "all", // 대시보드 멤버 필터: all | mine | <memberId>
   },
 };
 
@@ -299,16 +300,56 @@ function renderHome() {
 
 /* ============ 대시보드 (칸반 + 통계) ============ */
 function renderDashboard() {
-  const tasks = Store.list("tasks");
+  const members = Store.list("members");
+  const filter = App.state.taskMember;
+
+  // 멤버 필터 적용
+  const allTasks = Store.list("tasks");
+  const tasks = allTasks.filter((t) => {
+    if (filter === "all") return true;
+    if (filter === "mine") return t.assignee_id === curUser();
+    return t.assignee_id === filter;
+  });
+
   const counts = {
     todo: tasks.filter((t) => t.status === "todo").length,
     doing: tasks.filter((t) => t.status === "doing").length,
     done: tasks.filter((t) => t.status === "done").length,
   };
 
+  // 멤버별 보기 필터 바 (각 멤버 옆에 담당 할일 수 표시)
+  const chip = (key, label, active) =>
+    `<button class="member-filter ${active ? "active" : ""}" data-act="task-filter" data-member="${key}">${label}</button>`;
+  const filterBar = `
+    <div class="member-filter-bar">
+      ${chip("all", `전체 <b>${allTasks.length}</b>`, filter === "all")}
+      ${
+        curUser()
+          ? chip("mine", "내 할일", filter === "mine")
+          : ""
+      }
+      ${members
+        .map((m) => {
+          const n = allTasks.filter((t) => t.assignee_id === m.id).length;
+          return `<button class="member-filter ${
+            filter === m.id ? "active" : ""
+          }" data-act="task-filter" data-member="${m.id}" style="--c:${UI.esc(
+            m.color || "#64748b"
+          )}"><span class="mf-dot"></span>${UI.esc(m.name)} <b>${n}</b></button>`;
+        })
+        .join("")}
+    </div>`;
+
+  const who =
+    filter === "all"
+      ? "전체"
+      : filter === "mine"
+      ? "내 할일"
+      : UI.memberName(filter) + "님";
+
   const stats = `
     <div class="stat-row">
-      <div class="stat"><div class="stat-num">${tasks.length}</div><div class="stat-label">전체 할일</div></div>
+      <div class="stat"><div class="stat-num">${tasks.length}</div><div class="stat-label">${who} 할일</div></div>
       <div class="stat"><div class="stat-num">${counts.todo}</div><div class="stat-label">할 일</div></div>
       <div class="stat"><div class="stat-num">${counts.doing}</div><div class="stat-label">진행 중</div></div>
       <div class="stat"><div class="stat-num">${counts.done}</div><div class="stat-label">완료</div></div>
@@ -336,6 +377,7 @@ function renderDashboard() {
         <h2>할일 대시보드</h2>
         <button class="btn primary" data-act="task-add">+ 할 일 추가</button>
       </div>
+      ${filterBar}
       ${stats}
       <div class="kanban">${columns}</div>
     </section>`;
@@ -1201,6 +1243,10 @@ async function handleAction(act, el) {
 
   switch (act) {
     // 할일
+    case "task-filter":
+      App.state.taskMember = el.getAttribute("data-member");
+      render();
+      return;
     case "task-add": return taskForm();
     case "task-edit": return taskForm(find("tasks"));
     case "task-move": {

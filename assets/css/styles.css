@@ -171,6 +171,19 @@ a { color: inherit; }
 .stat-num { font-size: 26px; font-weight: 800; }
 .stat-label { color: var(--muted); font-size: 12px; }
 
+.member-filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.member-filter {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  border-radius: 999px; padding: 6px 13px; font-size: 13px; font-weight: 700;
+}
+.member-filter:hover { background: #f8fafc; }
+.member-filter b { color: var(--muted); font-weight: 800; }
+.member-filter .mf-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c, #64748b); }
+.member-filter.active { background: var(--c, var(--brand)); color: #fff; border-color: transparent; }
+.member-filter.active b { color: rgba(255,255,255,.85); }
+.member-filter.active .mf-dot { background: #fff; }
+
 .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .kanban-col { background: #eef2f7; border-radius: var(--radius); padding: 10px; }
 .kanban-head { display: flex; justify-content: space-between; font-weight: 800; padding: 6px 6px 12px; font-size: 13px; }
