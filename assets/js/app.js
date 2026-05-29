@@ -1,6 +1,7 @@
 /* 업무 공유 - 메인 앱 (라우터 + 화면) */
 
 const NAV = [
+  { id: "home", label: "홈", icon: "🏠" },
   { id: "dashboard", label: "할일 대시보드", icon: "🗂️" },
   { id: "calendar", label: "캘린더", icon: "📅" },
   { id: "databoard", label: "데이터 보드", icon: "📚" },
@@ -22,7 +23,7 @@ const MEMBER_COLORS = [
 ];
 
 const App = {
-  route: location.hash.replace("#", "") || "dashboard",
+  route: location.hash.replace("#", "") || "home",
   // 화면별 임시 상태 보관
   state: {
     databoardTab: "resources",
@@ -93,6 +94,207 @@ function renderNav() {
           }"><span class="nav-icon">${n.icon}</span>${n.label}</a>`
       ).join("")}
     </nav>`;
+}
+
+/* ============ 홈 (전체 한눈에 보기) ============ */
+function renderHome() {
+  const today = UI.todayInput();
+  const tasks = Store.list("tasks");
+  const events = Store.list("events");
+  const meetings = Store.list("meetings");
+  const ideas = Store.list("ideas");
+  const resources = Store.list("resources");
+  const retros = Store.list("retros");
+  const reports = Store.list("reports");
+  const members = Store.list("members");
+
+  const me = curUser();
+  const greetName = me ? UI.memberName(me) + "님" : "";
+  const hour = new Date().getHours();
+  const greet = hour < 11 ? "좋은 아침이에요" : hour < 18 ? "오늘도 화이팅이에요" : "오늘도 수고하셨어요";
+
+  // 통계
+  const counts = {
+    todo: tasks.filter((t) => t.status === "todo").length,
+    doing: tasks.filter((t) => t.status === "doing").length,
+    done: tasks.filter((t) => t.status === "done").length,
+  };
+
+  // 진행중/예정 할일 (완료 제외, 마감 임박 우선)
+  const myTasks = tasks
+    .filter((t) => t.status !== "done")
+    .sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"))
+    .slice(0, 6);
+
+  // 다가오는 일정 (오늘 이후)
+  const upcoming = events
+    .filter((e) => e.date && e.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 6);
+
+  // 최근 항목들
+  const recentMeetings = meetings
+    .slice()
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .slice(0, 3);
+  const recentIdeas = ideas.slice().reverse().slice(0, 3);
+  const recentResources = resources
+    .filter((r) => r.kind === "image" && r.image_data)
+    .slice()
+    .reverse()
+    .slice(0, 4);
+  const recentRetro = retros
+    .slice()
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
+
+  // 오늘 보고 현황
+  const reportStatus = members.map((m) => ({
+    m,
+    done: reports.some((r) => r.member_id === m.id && r.date === today),
+  }));
+
+  const sec = (title, route, body, addAct) => `
+    <div class="home-card">
+      <div class="home-card-head">
+        <h3>${title}</h3>
+        <div class="home-card-actions">
+          ${addAct ? `<button class="btn xs primary" data-act="${addAct}">+ 추가</button>` : ""}
+          <a class="more-link" href="#${route}">더보기 ›</a>
+        </div>
+      </div>
+      <div class="home-card-body">${body}</div>
+    </div>`;
+
+  // --- 위젯: 할일 ---
+  const tasksBody = myTasks.length
+    ? `<div class="mini-list">${myTasks
+        .map((t) => {
+          const overdue = t.due_date && t.due_date < today;
+          return `<div class="mini-row">
+            <span class="dot status-${t.status}"></span>
+            <span class="mini-title">${UI.esc(t.title)}</span>
+            ${UI.memberChip(t.assignee_id)}
+            ${
+              t.due_date
+                ? `<span class="mini-due ${overdue ? "overdue" : ""}">${UI.fmtDate(
+                    t.due_date
+                  )}</span>`
+                : ""
+            }
+            <button class="btn xs ghost" data-act="task-move" data-id="${t.id}" data-to="${
+            t.status === "todo" ? "doing" : "done"
+          }">${t.status === "todo" ? "▶" : "✓"}</button>
+          </div>`;
+        })
+        .join("")}</div>`
+    : `<div class="empty-mini">진행 중인 할 일이 없습니다</div>`;
+
+  // --- 위젯: 일정 ---
+  const eventsBody = upcoming.length
+    ? `<div class="mini-list">${upcoming
+        .map(
+          (e) => `<div class="mini-row">
+            <span class="mini-date">${UI.fmtDate(e.date)}</span>
+            <span class="cal-ev scope-${e.scope || "day"} inline">${
+            e.scope === "month" ? "월" : e.scope === "week" ? "주" : "일"
+          }</span>
+            <span class="mini-title">${UI.esc(e.title)}</span>
+          </div>`
+        )
+        .join("")}</div>`
+    : `<div class="empty-mini">예정된 일정이 없습니다</div>`;
+
+  // --- 위젯: 회의록 ---
+  const meetingsBody = recentMeetings.length
+    ? `<div class="mini-list">${recentMeetings
+        .map(
+          (m) => `<div class="mini-row">
+            <span class="mini-date">${UI.fmtDate(m.date)}</span>
+            <span class="mini-title">${UI.esc(m.title)}</span>
+          </div>`
+        )
+        .join("")}</div>`
+    : `<div class="empty-mini">회의록이 없습니다</div>`;
+
+  // --- 위젯: 아이디어 ---
+  const ideasBody = recentIdeas.length
+    ? `<div class="mini-list">${recentIdeas
+        .map(
+          (i) => `<div class="mini-row">
+            <span class="mini-title">💡 ${UI.esc(i.title)}</span>
+            ${UI.memberChip(i.member_id)}
+          </div>`
+        )
+        .join("")}</div>`
+    : `<div class="empty-mini">아이디어가 없습니다</div>`;
+
+  // --- 위젯: 자료실 ---
+  const resBody = recentResources.length
+    ? `<div class="home-thumbs">${recentResources
+        .map((r) => `<div class="home-thumb"><img src="${UI.esc(r.image_data)}" alt=""></div>`)
+        .join("")}</div>`
+    : `<div class="empty-mini">올라온 자료가 없습니다</div>`;
+
+  // --- 위젯: 회고 ---
+  const retroBody = recentRetro
+    ? `<div class="mini-kpt">
+        <div><b>👍 Keep</b> ${UI.esc((recentRetro.keep || "-").slice(0, 60))}</div>
+        <div><b>⚠️ Problem</b> ${UI.esc((recentRetro.problem || "-").slice(0, 60))}</div>
+        <div><b>🚀 Try</b> ${UI.esc((recentRetro.try_ || "-").slice(0, 60))}</div>
+        <div class="muted">${UI.memberName(recentRetro.member_id)} · ${UI.fmtDate(
+        recentRetro.date
+      )}</div>
+      </div>`
+    : `<div class="empty-mini">작성된 회고가 없습니다</div>`;
+
+  // --- 위젯: 오늘 보고 현황 ---
+  const reportBody = members.length
+    ? `<div class="report-status">${reportStatus
+        .map(
+          (s) =>
+            `<span class="rs-item ${s.done ? "ok" : ""}">${
+              s.done ? "✅" : "⬜"
+            } ${UI.esc(s.m.name)}</span>`
+        )
+        .join("")}</div>`
+    : `<div class="empty-mini">멤버를 먼저 등록하세요</div>`;
+
+  return `
+    <section class="view">
+      <div class="home-banner">
+        <div>
+          <div class="home-greet">${greet}${greetName ? ", " + UI.esc(greetName) : ""} 👋</div>
+          <div class="home-date">${new Date().toLocaleDateString("ko-KR", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            weekday: "long",
+          })}</div>
+        </div>
+        <div class="home-quick">
+          <button class="btn primary sm" data-act="task-add">+ 할 일</button>
+          <button class="btn ghost sm" data-act="event-add">+ 일정</button>
+          <button class="btn ghost sm" data-act="report-auto">+ 오늘 보고</button>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat"><div class="stat-num">${tasks.length}</div><div class="stat-label">전체 할일</div></div>
+        <div class="stat"><div class="stat-num">${counts.doing}</div><div class="stat-label">진행 중</div></div>
+        <div class="stat"><div class="stat-num">${counts.todo}</div><div class="stat-label">할 일</div></div>
+        <div class="stat"><div class="stat-num">${counts.done}</div><div class="stat-label">완료</div></div>
+      </div>
+
+      <div class="home-grid">
+        ${sec("🗂️ 할 일 / 진행 중", "dashboard", tasksBody, "task-add")}
+        ${sec("📅 다가오는 일정", "calendar", eventsBody, "event-add")}
+        ${sec("📈 오늘 일일 보고 현황", "reports", reportBody, "report-auto")}
+        ${sec("📝 최근 회의록", "minutes", meetingsBody, "meeting-add")}
+        ${sec("💡 아이디어 노트", "databoard", ideasBody, "idea-add")}
+        ${sec("🖼️ 최근 자료실", "databoard", resBody, "res-add")}
+        ${sec("🔁 최근 KPT 회고", "kpt", retroBody, "kpt-add")}
+      </div>
+    </section>`;
 }
 
 /* ============ 대시보드 (칸반 + 통계) ============ */
@@ -973,6 +1175,7 @@ function render() {
   const root = document.getElementById("app");
   let view = "";
   switch (App.route) {
+    case "home": view = renderHome(); break;
     case "dashboard": view = renderDashboard(); break;
     case "calendar": view = renderCalendar(); break;
     case "databoard": view = renderDataboard(); break;
@@ -980,7 +1183,7 @@ function render() {
     case "kpt": view = renderKPT(); break;
     case "reports": view = renderReports(); break;
     case "members": view = renderMembers(); break;
-    default: view = renderDashboard();
+    default: view = renderHome();
   }
   root.innerHTML = `
     ${renderHeader()}
