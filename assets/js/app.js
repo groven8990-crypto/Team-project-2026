@@ -44,6 +44,7 @@ const App = {
     goalView: "table", // 업무 목표 보기: table | board
     docSelectedId: null, // 선택한 업무 문서
     docSearch: "", // 문서 검색어
+    reportTab: "daily", // 보고서 보기: daily | weekly
   },
 };
 
@@ -1605,34 +1606,36 @@ async function kptForm(existing) {
 
 /* ============ 일일 보고서 ============ */
 function renderReports() {
-  const items = Store.list("reports")
+  const tab = App.state.reportTab;
+  const all = Store.list("reports")
     .slice()
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-  const cards = items.length
-    ? items
-        .map(
-          (r) => `
-        <div class="card report-card">
-          <div class="card-top">
-            <strong>${UI.fmtDate(r.date)} 일일 보고</strong>
-            ${UI.memberChip(r.member_id)}
-          </div>
-          ${r.done ? `<div class="report-row"><b>오늘 한 일</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
-          ${r.todo ? `<div class="report-row"><b>내일 할 일</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
-          ${r.note ? `<div class="report-row"><b>특이사항</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
-          <div class="card-actions">
-            <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
-            <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
-            <button class="btn xs ghost" data-act="report-edit" data-id="${r.id}">수정</button>
-            <button class="btn xs danger" data-act="report-del" data-id="${r.id}">삭제</button>
-          </div>
-        </div>`
-        )
-        .join("")
-    : `<div class="empty">작성된 보고서가 없습니다.</div>`;
+  const items = all.filter((r) =>
+    tab === "weekly" ? r.kind === "weekly" : r.kind !== "weekly"
+  );
 
-  return `
-    <section class="view">
+  const toggle = `
+    <div class="view-toggle">
+      <button class="vt ${tab === "daily" ? "active" : ""}" data-act="report-tab" data-tab="daily">📈 일일 보고서</button>
+      <button class="vt ${tab === "weekly" ? "active" : ""}" data-act="report-tab" data-tab="weekly">🗓️ 주간 보고서</button>
+    </div>`;
+
+  const cards = items.length
+    ? items.map((r) => (tab === "weekly" ? weeklyCard(r) : dailyCard(r))).join("")
+    : `<div class="empty">작성된 ${tab === "weekly" ? "주간" : "일일"} 보고서가 없습니다.</div>`;
+
+  const head =
+    tab === "weekly"
+      ? `
+      <div class="view-head">
+        <h2>주간 보고서</h2>
+        <div class="head-btns">
+          <button class="btn ghost" data-act="wreport-auto">⚡ 이번 주 일일보고 모아서 자동생성</button>
+          <button class="btn primary" data-act="wreport-add">+ 주간 보고서 작성</button>
+        </div>
+      </div>
+      <p class="muted">한 주의 실적과 다음 주 계획을 정리해 제출하세요. '자동생성'은 이번 주(월~금) 작성한 일일보고를 모아 초안을 만듭니다.</p>`
+      : `
       <div class="view-head">
         <h2>일일 보고서</h2>
         <div class="head-btns">
@@ -1640,9 +1643,52 @@ function renderReports() {
           <button class="btn primary" data-act="report-add">+ 보고서 작성</button>
         </div>
       </div>
-      <p class="muted">하루 동안 한 일을 보고서 형태로 기록하고 공유하세요. '자동생성'은 오늘 완료한 할일과 작성한 기록을 모아 초안을 만듭니다.</p>
+      <p class="muted">하루 동안 한 일을 보고서 형태로 기록하고 공유하세요. '자동생성'은 오늘 완료한 할일과 작성한 기록을 모아 초안을 만듭니다.</p>`;
+
+  return `
+    <section class="view">
+      ${head}
+      ${toggle}
       <div class="list">${cards}</div>
     </section>`;
+}
+
+function dailyCard(r) {
+  return `
+    <div class="card report-card">
+      <div class="card-top">
+        <strong>${UI.fmtDate(r.date)} 일일 보고</strong>
+        ${UI.memberChip(r.member_id)}
+      </div>
+      ${r.done ? `<div class="report-row"><b>오늘 한 일</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
+      ${r.todo ? `<div class="report-row"><b>내일 할 일</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
+      ${r.note ? `<div class="report-row"><b>특이사항</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
+      <div class="card-actions">
+        <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
+        <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
+        <button class="btn xs ghost" data-act="report-edit" data-id="${r.id}">수정</button>
+        <button class="btn xs danger" data-act="report-del" data-id="${r.id}">삭제</button>
+      </div>
+    </div>`;
+}
+
+function weeklyCard(r) {
+  return `
+    <div class="card report-card weekly">
+      <div class="card-top">
+        <strong>🗓️ ${UI.esc(r.period || UI.fmtDate(r.date))} 주간 보고</strong>
+        ${UI.memberChip(r.member_id)}
+      </div>
+      ${r.done ? `<div class="report-row"><b>이번 주 한 일</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
+      ${r.todo ? `<div class="report-row"><b>다음 주 계획</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
+      ${r.note ? `<div class="report-row"><b>이슈 / 건의</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
+      <div class="card-actions">
+        <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
+        <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
+        <button class="btn xs ghost" data-act="wreport-edit" data-id="${r.id}">수정</button>
+        <button class="btn xs danger" data-act="report-del" data-id="${r.id}">삭제</button>
+      </div>
+    </div>`;
 }
 
 function buildAutoReportDraft() {
@@ -1674,6 +1720,97 @@ function buildAutoReportDraft() {
   };
 }
 
+/* 이번 주(월~금) 범위 계산 */
+function currentWeekRange() {
+  const d = new Date();
+  const day = d.getDay(); // 0=일
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() + diffToMon);
+  const fri = new Date(mon);
+  fri.setDate(mon.getDate() + 4);
+  const fmt = (x) =>
+    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(
+      x.getDate()
+    ).padStart(2, "0")}`;
+  return { start: fmt(mon), end: fmt(fri) };
+}
+
+function buildWeeklyDraft() {
+  const me = curUser();
+  const { start, end } = currentWeekRange();
+  // 이번 주에 작성한 (본인) 일일보고 모으기
+  const dailies = Store.list("reports")
+    .filter(
+      (r) =>
+        r.kind !== "weekly" &&
+        (!me || r.member_id === me) &&
+        r.date >= start &&
+        r.date <= end
+    )
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+  const doneLines = [];
+  dailies.forEach((r) => {
+    if (!r.done) return;
+    const md = UI.fmtDate(r.date).slice(5); // MM.DD
+    r.done
+      .split("\n")
+      .filter((x) => x.trim())
+      .forEach((line) => doneLines.push(`[${md}] ${line.replace(/^[-\s]+/, "")}`));
+  });
+
+  // 다음 주 계획 = 미완료 할일
+  const todoTasks = Store.list("tasks").filter(
+    (t) => t.status !== "done" && (!me || t.assignee_id === me)
+  );
+  const todoLines = todoTasks.slice(0, 12).map((t) => "- " + t.title);
+
+  return {
+    kind: "weekly",
+    member_id: me,
+    date: start,
+    period: `${UI.fmtDate(start)} ~ ${UI.fmtDate(end)}`,
+    done: doneLines.join("\n"),
+    todo: todoLines.join("\n"),
+    note: "",
+  };
+}
+
+async function weeklyReportForm(existing, preset) {
+  const range = currentWeekRange();
+  const values = existing ||
+    preset || {
+      kind: "weekly",
+      member_id: curUser(),
+      date: range.start,
+      period: `${UI.fmtDate(range.start)} ~ ${UI.fmtDate(range.end)}`,
+    };
+  const res = await UI.formModal({
+    title: existing ? "주간 보고서 수정" : "주간 보고서 작성",
+    submitText: existing ? "수정" : "저장",
+    values,
+    fields: [
+      {
+        name: "member_id",
+        label: "작성자",
+        type: "select",
+        options: UI.memberOptions(false),
+      },
+      { name: "period", label: "기간", type: "text", placeholder: "예: 2026.05.26 ~ 05.30" },
+      { name: "done", label: "이번 주 한 일 (주요 실적)", type: "textarea", rows: 6, full: true },
+      { name: "todo", label: "다음 주 계획", type: "textarea", rows: 5, full: true },
+      { name: "note", label: "이슈 / 건의사항", type: "textarea", rows: 3, full: true },
+    ],
+  });
+  if (!res) return;
+  res.kind = "weekly";
+  if (!res.date) res.date = range.start;
+  if (existing) await Store.update("reports", existing.id, res);
+  else await Store.add("reports", res);
+  UI.toast("주간 보고서가 저장되었습니다");
+}
+
 async function reportForm(existing, preset) {
   const values = existing || preset || { member_id: curUser(), date: UI.todayInput() };
   const res = await UI.formModal({
@@ -1700,6 +1837,14 @@ async function reportForm(existing, preset) {
 }
 
 function reportToText(r) {
+  if (r.kind === "weekly") {
+    return (
+      `[주간 업무 보고] ${r.period || UI.fmtDate(r.date)} / ${UI.memberName(r.member_id)}\n\n` +
+      `■ 이번 주 한 일\n${r.done || "-"}\n\n` +
+      `■ 다음 주 계획\n${r.todo || "-"}\n\n` +
+      `■ 이슈 / 건의사항\n${r.note || "-"}`
+    );
+  }
   return (
     `[일일 업무 보고] ${UI.fmtDate(r.date)} / ${UI.memberName(r.member_id)}\n\n` +
     `■ 오늘 한 일\n${r.done || "-"}\n\n` +
@@ -1710,16 +1855,23 @@ function reportToText(r) {
 
 /* 제출용 보고서 양식 HTML */
 function reportSheetHTML(r) {
+  const weekly = r.kind === "weekly";
+  const title = weekly ? "주간 업무 보고서" : "일일 업무 보고서";
+  const periodLabel = weekly ? "기간" : "작성일";
+  const periodVal = weekly ? UI.esc(r.period || UI.fmtDate(r.date)) : UI.fmtDate(r.date);
+  const s1 = weekly ? "이번 주 한 일" : "오늘 한 일";
+  const s2 = weekly ? "다음 주 계획" : "내일 할 일";
+  const s3 = weekly ? "이슈 / 건의사항" : "특이사항 / 공유사항";
   return `
     <div class="report-sheet">
-      <h1>일일 업무 보고서</h1>
+      <h1>${title}</h1>
       <div class="rs-meta">
-        <div><span>작성일</span><b>${UI.fmtDate(r.date)}</b></div>
+        <div><span>${periodLabel}</span><b>${periodVal}</b></div>
         <div><span>작성자</span><b>${UI.esc(UI.memberName(r.member_id))}</b></div>
       </div>
-      <section><h3>오늘 한 일</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
-      <section><h3>내일 할 일</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
-      <section><h3>특이사항 / 공유사항</h3><div>${r.note ? UI.nl2br(r.note) : "-"}</div></section>
+      <section><h3>${s1}</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
+      <section><h3>${s2}</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
+      <section><h3>${s3}</h3><div>${r.note ? UI.nl2br(r.note) : "-"}</div></section>
     </div>`;
 }
 
@@ -2021,8 +2173,15 @@ async function handleAction(act, el) {
       return;
 
     // 보고서
+    case "report-tab":
+      App.state.reportTab = el.getAttribute("data-tab");
+      render();
+      return;
     case "report-add": return reportForm();
     case "report-auto": return reportForm(null, buildAutoReportDraft());
+    case "wreport-add": return weeklyReportForm();
+    case "wreport-auto": return weeklyReportForm(null, buildWeeklyDraft());
+    case "wreport-edit": return weeklyReportForm(find("reports"));
     case "report-submit": return openReportPreview(find("reports"));
     case "report-edit": return reportForm(find("reports"));
     case "report-del":

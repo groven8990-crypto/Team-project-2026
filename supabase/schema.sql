@@ -98,6 +98,8 @@ create table if not exists retros (
 create table if not exists reports (
   id text primary key,
   date text,
+  kind text default 'daily',         -- daily | weekly
+  period text,                       -- 주간 보고 기간 표시
   member_id text,
   done text,
   todo text,
