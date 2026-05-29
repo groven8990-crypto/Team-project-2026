@@ -194,6 +194,44 @@ a { color: inherit; }
 .due { color: var(--muted); }
 .due.overdue { color: var(--danger); font-weight: 700; }
 
+/* ===== 업무 목표 및 평가 ===== */
+.view-toggle { display: inline-flex; background: #e2e8f0; border-radius: 9px; padding: 3px; margin-bottom: 16px; gap: 2px; }
+.vt { border: none; background: transparent; padding: 7px 14px; border-radius: 7px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--muted); }
+.vt.active { background: #fff; color: var(--ink); box-shadow: var(--shadow); }
+
+.table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.goal-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 760px; }
+.goal-table thead th { text-align: center; font-size: 12px; color: var(--muted); font-weight: 800; padding: 12px 10px; border-bottom: 1px solid var(--line); background: #f8fafc; white-space: nowrap; }
+.goal-table th.ta-l { text-align: left; }
+.goal-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.goal-table tr:last-child td { border-bottom: none; }
+.goal-table td.ta-c { text-align: center; }
+.goal-table td.ta-l { text-align: left; color: #475569; }
+.goal-table td.nowrap { white-space: nowrap; }
+.goal-table tbody tr:hover { background: #f8fafc; }
+
+.year-tag { display: inline-block; background: #fef9c3; color: #854d0e; font-weight: 700; font-size: 12px; padding: 2px 9px; border-radius: 6px; }
+.status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--c); white-space: nowrap; }
+.status-badge .sb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+
+.weight { display: flex; align-items: center; gap: 8px; }
+.weight-bar { flex: 1; height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden; min-width: 50px; }
+.weight-bar span { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+.weight-num { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+
+.grade { display: inline-block; font-weight: 800; font-size: 12px; padding: 2px 9px; border-radius: 6px; }
+.grade.none { background: #f1f5f9; color: #94a3b8; }
+.grade.g-S { background: #fce7f3; color: #be185d; }
+.grade.g-A { background: #dcfce7; color: #15803d; }
+.grade.g-B { background: #dbeafe; color: #1d4ed8; }
+.grade.g-C { background: #fef3c7; color: #b45309; }
+
+.goal-card .lbl { display: inline-block; color: var(--muted); font-size: 11px; margin-right: 4px; }
+.goal-card .weight { margin: 8px 0; }
+.goal-kanban { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 980px) { .goal-kanban { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .goal-kanban { grid-template-columns: 1fr; } }
+
 /* ===== 캘린더 ===== */
 .cal-highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
 .hl-box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); }

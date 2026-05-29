@@ -100,11 +100,25 @@ create table if not exists reports (
   updated_at timestamptz
 );
 
+create table if not exists goals (
+  id text primary key,
+  year text,
+  status text default 'doing',       -- planned | doing | done | hold
+  title text not null,
+  weight text,                       -- 비중(%) 숫자 문자열
+  metric text,                       -- 평가지표
+  plan text,                         -- 실행계획
+  grade text,                        -- 평가등급: 미평가 | S | A | B | C
+  member_id text,
+  created_at timestamptz default now(),
+  updated_at timestamptz
+);
+
 -- =====================================================================
 -- 실시간(Realtime) 활성화: 변경 사항이 모든 팀원에게 즉시 반영됩니다.
 -- =====================================================================
 alter publication supabase_realtime add table
-  members, tasks, events, resources, meetings, ideas, links, retros, reports;
+  members, tasks, events, resources, meetings, ideas, links, retros, reports, goals;
 
 -- =====================================================================
 -- RLS (행 수준 보안)
@@ -116,7 +130,7 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'members','tasks','events','resources','meetings','ideas','links','retros','reports'
+    'members','tasks','events','resources','meetings','ideas','links','retros','reports','goals'
   ]
   loop
     execute format('alter table %I enable row level security;', t);

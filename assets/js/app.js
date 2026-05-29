@@ -3,6 +3,7 @@
 const NAV = [
   { id: "home", label: "홈", icon: "🏠" },
   { id: "dashboard", label: "할일 대시보드", icon: "🗂️" },
+  { id: "goals", label: "업무 목표", icon: "🎯" },
   { id: "calendar", label: "캘린더", icon: "📅" },
   { id: "databoard", label: "데이터 보드", icon: "📚" },
   { id: "minutes", label: "회의록", icon: "📝" },
@@ -17,6 +18,14 @@ const TASK_STATUS = [
   { key: "done", label: "완료" },
 ];
 
+const GOAL_STATUS = [
+  { key: "planned", label: "예정", color: "#94a3b8" },
+  { key: "doing", label: "진행 중", color: "#3b82f6" },
+  { key: "done", label: "완료", color: "#16a34a" },
+  { key: "hold", label: "보류", color: "#f59e0b" },
+];
+const GRADES = ["미평가", "S", "A", "B", "C"];
+
 const MEMBER_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4",
   "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#64748b",
@@ -30,6 +39,7 @@ const App = {
     kptMineOnly: false,
     calendarRef: new Date(),
     taskMember: "all", // 대시보드 멤버 필터: all | mine | <memberId>
+    goalView: "table", // 업무 목표 보기: table | board
   },
 };
 
@@ -445,6 +455,168 @@ async function taskForm(existing) {
     await Store.add("tasks", res);
     UI.toast("추가되었습니다");
   }
+}
+
+/* ============ 업무 목표 및 평가 ============ */
+function goalStatusMeta(key) {
+  return GOAL_STATUS.find((s) => s.key === key) || GOAL_STATUS[1];
+}
+function statusBadge(key) {
+  const s = goalStatusMeta(key);
+  return `<span class="status-badge" style="--c:${s.color}"><span class="sb-dot"></span>${s.label}</span>`;
+}
+function weightBar(w) {
+  const n = Math.max(0, Math.min(100, parseInt(w, 10) || 0));
+  return `<div class="weight"><div class="weight-bar"><span style="width:${n}%"></span></div><span class="weight-num">${n}%</span></div>`;
+}
+function gradeBadge(g) {
+  if (!g || g === "미평가") return `<span class="grade none">미평가</span>`;
+  return `<span class="grade g-${g}">${UI.esc(g)}</span>`;
+}
+
+function renderGoals() {
+  const view = App.state.goalView;
+  const toggle = `
+    <div class="view-toggle">
+      <button class="vt ${view === "table" ? "active" : ""}" data-act="goal-view" data-view="table">▦ 테이블 보기</button>
+      <button class="vt ${view === "board" ? "active" : ""}" data-act="goal-view" data-view="board">▢ 상태별 보기</button>
+    </div>`;
+
+  return `
+    <section class="view">
+      <div class="view-head">
+        <h2>📌 업무 목표 및 평가</h2>
+        <button class="btn primary" data-act="goal-add">+ 목표 추가</button>
+      </div>
+      ${toggle}
+      ${view === "table" ? goalsTable() : goalsBoard()}
+    </section>`;
+}
+
+function goalsTable() {
+  const goals = Store.list("goals")
+    .slice()
+    .sort(
+      (a, b) =>
+        (b.year || "").localeCompare(a.year || "") ||
+        (a.status || "").localeCompare(b.status || "")
+    );
+  if (!goals.length)
+    return `<div class="empty">등록된 업무 목표가 없습니다. "+ 목표 추가"로 시작하세요.</div>`;
+
+  const rows = goals
+    .map(
+      (g) => `
+      <tr>
+        <td class="ta-c"><span class="year-tag">${UI.esc(g.year || "-")}</span></td>
+        <td>${statusBadge(g.status)}</td>
+        <td><strong>${UI.esc(g.title)}</strong></td>
+        <td style="min-width:120px">${weightBar(g.weight)}</td>
+        <td class="ta-l">${g.metric ? UI.nl2br(g.metric) : "<span class='muted'>-</span>"}</td>
+        <td>${UI.memberChip(g.member_id)}</td>
+        <td class="ta-c">${gradeBadge(g.grade)}</td>
+        <td class="ta-c nowrap">
+          <button class="btn xs ghost" data-act="goal-edit" data-id="${g.id}">수정</button>
+          <button class="btn xs danger" data-act="goal-del" data-id="${g.id}">삭제</button>
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  return `
+    <div class="table-wrap">
+      <table class="goal-table">
+        <thead>
+          <tr>
+            <th>대상년도</th><th>상태</th><th>중점추진과제</th><th>비중</th>
+            <th class="ta-l">평가지표</th><th>담당</th><th>평가</th><th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function goalsBoard() {
+  const goals = Store.list("goals");
+  const cols = GOAL_STATUS.map((s) => {
+    const items = goals
+      .filter((g) => (g.status || "doing") === s.key)
+      .sort((a, b) => (parseInt(b.weight) || 0) - (parseInt(a.weight) || 0));
+    const cards = items.length
+      ? items.map((g) => goalCard(g)).join("")
+      : `<div class="empty-mini">항목 없음</div>`;
+    return `
+      <div class="kanban-col">
+        <div class="kanban-head"><span style="color:${s.color}">● ${s.label} <b>${items.length}</b></span></div>
+        <div class="kanban-body">${cards}</div>
+      </div>`;
+  }).join("");
+  return `<div class="kanban goal-kanban">${cols}</div>`;
+}
+
+function goalCard(g) {
+  return `
+    <div class="card goal-card">
+      <div class="card-top">
+        <strong>${UI.esc(g.title)}</strong>
+        ${gradeBadge(g.grade)}
+      </div>
+      ${weightBar(g.weight)}
+      ${g.plan ? `<p class="card-desc"><b class="lbl">실행계획</b> ${UI.nl2br(g.plan)}</p>` : ""}
+      ${g.metric ? `<p class="card-desc"><b class="lbl">평가지표</b> ${UI.nl2br(g.metric)}</p>` : ""}
+      <div class="card-meta">
+        <span class="year-tag">${UI.esc(g.year || "-")}</span>
+        ${UI.memberChip(g.member_id)}
+      </div>
+      <div class="card-actions">
+        <button class="btn xs ghost" data-act="goal-edit" data-id="${g.id}">수정</button>
+        <button class="btn xs danger" data-act="goal-del" data-id="${g.id}">삭제</button>
+      </div>
+    </div>`;
+}
+
+async function goalForm(existing) {
+  const values = existing || {
+    member_id: curUser(),
+    status: "doing",
+    year: String(new Date().getFullYear()),
+    grade: "미평가",
+  };
+  const res = await UI.formModal({
+    title: existing ? "업무 목표 수정" : "업무 목표 추가",
+    submitText: existing ? "수정" : "추가",
+    values,
+    fields: [
+      { name: "title", label: "중점추진과제", type: "text", required: true, full: true },
+      { name: "year", label: "대상년도", type: "text", placeholder: "예: 2025" },
+      {
+        name: "status",
+        label: "상태",
+        type: "select",
+        options: GOAL_STATUS.map((s) => ({ value: s.key, label: s.label })),
+      },
+      { name: "weight", label: "비중 (%)", type: "text", placeholder: "예: 30" },
+      {
+        name: "member_id",
+        label: "담당자",
+        type: "select",
+        options: UI.memberOptions(false),
+      },
+      { name: "metric", label: "평가지표", type: "textarea", rows: 3, full: true },
+      { name: "plan", label: "실행계획", type: "textarea", rows: 3, full: true },
+      {
+        name: "grade",
+        label: "평가등급",
+        type: "select",
+        options: GRADES.map((g) => ({ value: g, label: g })),
+      },
+    ],
+  });
+  if (!res) return;
+  if (existing) await Store.update("goals", existing.id, res);
+  else await Store.add("goals", res);
+  UI.toast("저장되었습니다");
 }
 
 /* ============ 캘린더 ============ */
@@ -1219,6 +1391,7 @@ function render() {
   switch (App.route) {
     case "home": view = renderHome(); break;
     case "dashboard": view = renderDashboard(); break;
+    case "goals": view = renderGoals(); break;
     case "calendar": view = renderCalendar(); break;
     case "databoard": view = renderDataboard(); break;
     case "minutes": view = renderMinutes(); break;
@@ -1256,6 +1429,17 @@ async function handleAction(act, el) {
     }
     case "task-del":
       if (await UI.confirmBox("이 할 일을 삭제할까요?")) await Store.remove("tasks", id);
+      return;
+
+    // 업무 목표
+    case "goal-view":
+      App.state.goalView = el.getAttribute("data-view");
+      render();
+      return;
+    case "goal-add": return goalForm();
+    case "goal-edit": return goalForm(find("goals"));
+    case "goal-del":
+      if (await UI.confirmBox("이 목표를 삭제할까요?")) await Store.remove("goals", id);
       return;
 
     // 캘린더
