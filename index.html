@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>업무 공유</title>
+  <meta name="description" content="유통 팀 업무 공유 대시보드 - 할일, 캘린더, 자료실, 회의록, KPT 회고, 일일 보고서" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- 설정: 여기 키를 채우면 실시간 공유 모드로 전환됩니다 -->
+  <script src="assets/js/config.js"></script>
+  <!-- Supabase 클라이언트 (실시간 공유 모드에서만 사용) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- 앱 -->
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/ui.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
