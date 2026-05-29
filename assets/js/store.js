@@ -23,6 +23,7 @@ const COLLECTIONS = [
   "retros",
   "reports",
   "goals",
+  "docs",
 ];
 
 const LS_KEY = "work-share-db-v1";

@@ -4,6 +4,7 @@ const NAV = [
   { id: "home", label: "홈", icon: "🏠" },
   { id: "dashboard", label: "할일 대시보드", icon: "🗂️" },
   { id: "goals", label: "업무 목표", icon: "🎯" },
+  { id: "docs", label: "업무 문서", icon: "📄" },
   { id: "calendar", label: "캘린더", icon: "📅" },
   { id: "databoard", label: "데이터 보드", icon: "📚" },
   { id: "minutes", label: "회의록", icon: "📝" },
@@ -40,6 +41,8 @@ const App = {
     calendarRef: new Date(),
     taskMember: "all", // 대시보드 멤버 필터: all | mine | <memberId>
     goalView: "table", // 업무 목표 보기: table | board
+    docSelectedId: null, // 선택한 업무 문서
+    docSearch: "", // 문서 검색어
   },
 };
 
@@ -617,6 +620,288 @@ async function goalForm(existing) {
   if (existing) await Store.update("goals", existing.id, res);
   else await Store.add("goals", res);
   UI.toast("저장되었습니다");
+}
+
+/* ============ 업무 문서 (SOP 문서함) ============ */
+const SOP_TEMPLATE = `# 목적
+이 업무(SOP)의 목적을 한두 문장으로 적습니다.
+
+# 적용 범위
+이 절차가 적용되는 업무/대상/상황을 적습니다.
+
+# 용어 정의
+- 용어: 설명
+
+# 담당자 및 역할
+- 담당자:
+- 역할:
+
+# 업무 절차
+1. (단계 1) 무엇을, 어떻게
+2. (단계 2) 무엇을, 어떻게
+3. (단계 3) 무엇을, 어떻게
+
+# 주의사항 / 체크포인트
+-
+
+# 관련 문서 / 링크
+-
+
+# 개정 이력
+- (날짜) 최초 작성 (작성자: )`;
+
+/* 아주 가벼운 마크다운 렌더러 (제목/목록/굵게/구분선) */
+function mdToHtml(src) {
+  const lines = String(src || "").split("\n");
+  let html = "";
+  let listType = null; // 'ul' | 'ol'
+  const closeList = () => {
+    if (listType) {
+      html += listType === "ul" ? "</ul>" : "</ol>";
+      listType = null;
+    }
+  };
+  const inline = (s) =>
+    UI.esc(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, "<code>$1</code>")
+      .replace(
+        /(https?:\/\/[^\s]+)/g,
+        '<a href="$1" target="_blank" rel="noopener">$1</a>'
+      );
+
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, "");
+    if (!line.trim()) {
+      closeList();
+      continue;
+    }
+    let m;
+    if ((m = line.match(/^###\s+(.*)/))) {
+      closeList();
+      html += `<h5>${inline(m[1])}</h5>`;
+    } else if ((m = line.match(/^##\s+(.*)/))) {
+      closeList();
+      html += `<h4>${inline(m[1])}</h4>`;
+    } else if ((m = line.match(/^#\s+(.*)/))) {
+      closeList();
+      html += `<h3>${inline(m[1])}</h3>`;
+    } else if (/^[-*]\s+/.test(line)) {
+      if (listType !== "ul") {
+        closeList();
+        html += "<ul>";
+        listType = "ul";
+      }
+      html += `<li>${inline(line.replace(/^[-*]\s+/, ""))}</li>`;
+    } else if (/^\d+\.\s+/.test(line)) {
+      if (listType !== "ol") {
+        closeList();
+        html += "<ol>";
+        listType = "ol";
+      }
+      html += `<li>${inline(line.replace(/^\d+\.\s+/, ""))}</li>`;
+    } else if (/^---+$/.test(line)) {
+      closeList();
+      html += "<hr>";
+    } else {
+      closeList();
+      html += `<p>${inline(line)}</p>`;
+    }
+  }
+  closeList();
+  return html || `<p class="muted">내용이 비어 있습니다.</p>`;
+}
+
+function docMatches(d, q) {
+  if (!q) return true;
+  const s = (d.title + " " + (d.category || "") + " " + (d.body || "")).toLowerCase();
+  return s.includes(q.toLowerCase());
+}
+
+function docTreeHTML() {
+  const q = App.state.docSearch;
+  const all = Store.list("docs");
+  const docs = all.filter((d) => !d.is_template && docMatches(d, q));
+  const templates = all.filter((d) => d.is_template && docMatches(d, q));
+
+  // 카테고리별 그룹
+  const groups = {};
+  docs.forEach((d) => {
+    const c = d.category || "미분류";
+    (groups[c] = groups[c] || []).push(d);
+  });
+  const catNames = Object.keys(groups).sort((a, b) => a.localeCompare(b, "ko"));
+
+  const sel = App.state.docSelectedId;
+  let html = "";
+
+  if (!catNames.length && !templates.length) {
+    html += `<div class="empty-mini">${
+      q ? "검색 결과가 없습니다" : "문서가 없습니다"
+    }</div>`;
+  }
+
+  catNames.forEach((c) => {
+    const items = groups[c]
+      .slice()
+      .sort((a, b) => (a.title || "").localeCompare(b.title || "", "ko"));
+    html += `<div class="doc-group">
+      <div class="doc-group-head">📁 ${UI.esc(c)} <span>${items.length}</span></div>
+      ${items
+        .map(
+          (d) =>
+            `<div class="doc-item ${d.id === sel ? "active" : ""}" data-act="doc-select" data-id="${
+              d.id
+            }">📄 ${UI.esc(d.title)}</div>`
+        )
+        .join("")}
+    </div>`;
+  });
+
+  if (templates.length) {
+    html += `<div class="doc-group templates">
+      <div class="doc-group-head">⭐ 양식(템플릿) <span>${templates.length}</span></div>
+      ${templates
+        .map(
+          (d) =>
+            `<div class="doc-item ${d.id === sel ? "active" : ""}" data-act="doc-select" data-id="${
+              d.id
+            }">📋 ${UI.esc(d.title)}</div>`
+        )
+        .join("")}
+    </div>`;
+  }
+  return html;
+}
+
+function docMainHTML() {
+  const docs = Store.list("docs");
+  if (!docs.length) {
+    return `<div class="doc-empty">
+      <div class="doc-empty-icon">📄</div>
+      <h3>업무 표준 문서함</h3>
+      <p class="muted">SOP·업무 매뉴얼·체크리스트 등을 한곳에 모아두고, 신입도 한눈에 보게 만드세요.<br>
+      기본 양식을 만든 뒤 <b>복제</b>해서 다양한 문서로 활용할 수 있어요.</p>
+      <div class="doc-empty-cta">
+        <button class="btn primary" data-act="doc-new-template">⭐ SOP 기본 양식으로 시작</button>
+        <button class="btn ghost" data-act="doc-new">빈 문서 만들기</button>
+      </div>
+    </div>`;
+  }
+
+  let id = App.state.docSelectedId;
+  if (!id || !docs.some((d) => d.id === id)) {
+    App.state.docSelectedId = id = docs[0].id;
+  }
+  const d = docs.find((x) => x.id === id);
+
+  return `
+    <div class="doc-view-head">
+      <div>
+        ${d.is_template ? `<span class="tpl-tag">⭐ 양식</span>` : ""}
+        <span class="year-tag">${UI.esc(d.category || "미분류")}</span>
+        <h2>${UI.esc(d.title)}</h2>
+        <div class="muted doc-byline">작성: ${UI.memberName(d.member_id)} · 수정: ${UI.fmtDateTime(
+    d.updated_at || d.created_at
+  )}</div>
+      </div>
+      <div class="doc-view-actions">
+        <button class="btn ghost sm" data-act="doc-duplicate" data-id="${d.id}">📑 복제</button>
+        <button class="btn ghost sm" data-act="doc-edit" data-id="${d.id}">✎ 수정</button>
+        <button class="btn danger sm" data-act="doc-del" data-id="${d.id}">삭제</button>
+      </div>
+    </div>
+    <article class="doc-body">${mdToHtml(d.body)}</article>`;
+}
+
+function renderDocs() {
+  return `
+    <section class="view">
+      <div class="view-head">
+        <h2>업무 문서 (SOP)</h2>
+        <div class="head-btns">
+          <button class="btn ghost" data-act="doc-new-template">⭐ 양식으로 만들기</button>
+          <button class="btn primary" data-act="doc-new">+ 새 문서</button>
+        </div>
+      </div>
+      <div class="doc-layout">
+        <aside class="doc-sidebar">
+          <input id="docSearch" class="doc-search" type="search" placeholder="🔍 문서 검색…" value="${UI.esc(
+            App.state.docSearch
+          )}">
+          <div id="docTree" class="doc-tree">${docTreeHTML()}</div>
+        </aside>
+        <main class="doc-main" id="docMain">${docMainHTML()}</main>
+      </div>
+    </section>`;
+}
+
+async function docForm(existing, useTemplate) {
+  const values = existing || {
+    member_id: curUser(),
+    category: useTemplate ? "SOP" : "",
+    body: useTemplate ? SOP_TEMPLATE : "",
+    is_template: false,
+  };
+  // 기존 카테고리 추천 목록
+  const cats = Array.from(
+    new Set(Store.list("docs").map((d) => d.category).filter(Boolean))
+  );
+  const res = await UI.formModal({
+    title: existing ? "문서 수정" : useTemplate ? "양식으로 새 문서" : "새 문서",
+    submitText: existing ? "수정" : "만들기",
+    values,
+    fields: [
+      { name: "title", label: "문서 제목", type: "text", required: true, full: true },
+      {
+        name: "category",
+        label: "카테고리(폴더)",
+        type: "text",
+        placeholder: cats.length ? "예: " + cats.slice(0, 3).join(", ") : "예: SOP, 매뉴얼, 체크리스트",
+      },
+      {
+        name: "is_template",
+        label: "양식(템플릿)으로 저장",
+        type: "select",
+        options: [
+          { value: "", label: "일반 문서" },
+          { value: "yes", label: "양식으로 저장 (복제용)" },
+        ],
+      },
+      {
+        name: "body",
+        label: "내용 (# 제목, - 목록, **굵게** 사용 가능)",
+        type: "textarea",
+        rows: 16,
+        full: true,
+      },
+    ],
+  });
+  if (!res) return;
+  res.is_template = res.is_template === "yes";
+  if (existing) {
+    await Store.update("docs", existing.id, res);
+    UI.toast("문서가 수정되었습니다");
+  } else {
+    const created = await Store.add("docs", res);
+    App.state.docSelectedId = created.id;
+    UI.toast("문서가 생성되었습니다");
+  }
+}
+
+async function duplicateDoc(id) {
+  const d = Store.list("docs").find((x) => x.id === id);
+  if (!d) return;
+  const copy = {
+    title: d.title + " (복사본)",
+    category: d.category,
+    body: d.body,
+    is_template: false,
+    member_id: curUser() || d.member_id,
+  };
+  const created = await Store.add("docs", copy);
+  App.state.docSelectedId = created.id;
+  UI.toast("복제되었습니다. 수정해서 사용하세요");
 }
 
 /* ============ 캘린더 ============ */
@@ -1392,6 +1677,7 @@ function render() {
     case "home": view = renderHome(); break;
     case "dashboard": view = renderDashboard(); break;
     case "goals": view = renderGoals(); break;
+    case "docs": view = renderDocs(); break;
     case "calendar": view = renderCalendar(); break;
     case "databoard": view = renderDataboard(); break;
     case "minutes": view = renderMinutes(); break;
@@ -1440,6 +1726,22 @@ async function handleAction(act, el) {
     case "goal-edit": return goalForm(find("goals"));
     case "goal-del":
       if (await UI.confirmBox("이 목표를 삭제할까요?")) await Store.remove("goals", id);
+      return;
+
+    // 업무 문서
+    case "doc-new": return docForm(null, false);
+    case "doc-new-template": return docForm(null, true);
+    case "doc-select":
+      App.state.docSelectedId = id;
+      render();
+      return;
+    case "doc-edit": return docForm(find("docs"), false);
+    case "doc-duplicate": return duplicateDoc(id);
+    case "doc-del":
+      if (await UI.confirmBox("이 문서를 삭제할까요?")) {
+        await Store.remove("docs", id);
+        if (App.state.docSelectedId === id) App.state.docSelectedId = null;
+      }
       return;
 
     // 캘린더
@@ -1554,6 +1856,15 @@ function bindGlobalEvents() {
     }
     if (e.target.id === "addMemberQuick") memberForm();
     if (e.target.id === "dataMenuBtn") openDataMenu();
+  });
+
+  // 문서 검색 (입력 중에는 트리만 갱신 → 포커스 유지)
+  document.body.addEventListener("input", (e) => {
+    if (e.target.id === "docSearch") {
+      App.state.docSearch = e.target.value;
+      const tree = document.getElementById("docTree");
+      if (tree) tree.innerHTML = docTreeHTML();
+    }
   });
 
   // 사용자 선택 / KPT 필터 (change)
