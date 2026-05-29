@@ -1965,9 +1965,10 @@ async function memberForm(existing) {
       { name: "name", label: "이름", type: "text", required: true, full: true },
       {
         name: "color",
-        label: "색상",
-        type: "select",
-        options: MEMBER_COLORS.map((c) => ({ value: c, label: c })),
+        label: "색상 (클릭해서 선택)",
+        type: "color",
+        full: true,
+        options: MEMBER_COLORS,
       },
     ],
   });

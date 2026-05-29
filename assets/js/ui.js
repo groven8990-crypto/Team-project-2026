@@ -138,6 +138,20 @@ const UI = (function () {
                    <div class="img-preview" id="${id}_preview">${
             initial ? `<img src="${esc(initial)}">` : ""
           }</div>`;
+        } else if (f.type === "color") {
+          const colors = f.options || [];
+          html += `<div class="color-picker" id="${id}">
+            ${colors
+              .map(
+                (c) =>
+                  `<button type="button" class="swatch ${
+                    String(initial) === c ? "active" : ""
+                  }" data-color="${esc(c)}" style="background:${esc(c)}" title="${esc(
+                    c
+                  )}"></button>`
+              )
+              .join("")}
+          </div>`;
         } else if (f.type === "items") {
           const rows = Array.isArray(initial) && initial.length ? initial : [{}];
           html += `<div class="items-editor" id="${id}">
@@ -198,7 +212,7 @@ const UI = (function () {
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
-      // 안건 행 추가/삭제
+      // 안건 행 추가/삭제 + 색상 선택
       form.addEventListener("click", (e) => {
         const add = e.target.closest(".add-item-row");
         if (add) {
@@ -207,7 +221,16 @@ const UI = (function () {
           return;
         }
         const del = e.target.closest(".ir-del");
-        if (del) del.closest(".item-row").remove();
+        if (del) {
+          del.closest(".item-row").remove();
+          return;
+        }
+        const sw = e.target.closest(".swatch");
+        if (sw) {
+          const picker = sw.closest(".color-picker");
+          picker.querySelectorAll(".swatch").forEach((s) => s.classList.remove("active"));
+          sw.classList.add("active");
+        }
       });
 
       const first = form.querySelector("input,textarea,select");
@@ -236,6 +259,14 @@ const UI = (function () {
           if (f.type === "static") continue;
           if (f.type === "image") {
             out[f.name] = imageData[f.name] || "";
+            continue;
+          }
+          if (f.type === "color") {
+            const picker = form.querySelector(`#f_${f.name}`);
+            const active = picker.querySelector(".swatch.active");
+            out[f.name] = active
+              ? active.getAttribute("data-color")
+              : values[f.name] || f.value || "";
             continue;
           }
           if (f.type === "items") {
