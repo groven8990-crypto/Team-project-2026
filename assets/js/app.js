@@ -1621,6 +1621,7 @@ function renderReports() {
           ${r.todo ? `<div class="report-row"><b>내일 할 일</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
           ${r.note ? `<div class="report-row"><b>특이사항</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
           <div class="card-actions">
+            <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
             <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
             <button class="btn xs ghost" data-act="report-edit" data-id="${r.id}">수정</button>
             <button class="btn xs danger" data-act="report-del" data-id="${r.id}">삭제</button>
@@ -1705,6 +1706,66 @@ function reportToText(r) {
     `■ 내일 할 일\n${r.todo || "-"}\n\n` +
     `■ 특이사항\n${r.note || "-"}`
   );
+}
+
+/* 제출용 보고서 양식 HTML */
+function reportSheetHTML(r) {
+  return `
+    <div class="report-sheet">
+      <h1>일일 업무 보고서</h1>
+      <div class="rs-meta">
+        <div><span>작성일</span><b>${UI.fmtDate(r.date)}</b></div>
+        <div><span>작성자</span><b>${UI.esc(UI.memberName(r.member_id))}</b></div>
+      </div>
+      <section><h3>오늘 한 일</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
+      <section><h3>내일 할 일</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
+      <section><h3>특이사항 / 공유사항</h3><div>${r.note ? UI.nl2br(r.note) : "-"}</div></section>
+    </div>`;
+}
+
+/* 제출용 보고서 미리보기 (복사/인쇄·PDF) */
+function openReportPreview(r) {
+  if (!r) return;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal report-modal">
+      <div class="modal-head">
+        <h3>제출용 보고서</h3>
+        <button class="icon-btn" data-close>✕</button>
+      </div>
+      <div class="modal-body report-preview-body">${reportSheetHTML(r)}</div>
+      <div class="modal-foot">
+        <button class="btn ghost" data-copy>📋 복사</button>
+        <button class="btn primary" data-print>🖨️ 인쇄 · PDF 저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) close();
+  });
+  overlay.querySelector("[data-close]").onclick = close;
+  overlay.querySelector("[data-copy]").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(reportToText(r));
+      UI.toast("보고서가 복사되었습니다");
+    } catch (e) {
+      UI.toast("복사 권한이 없습니다", "warn");
+    }
+  };
+  overlay.querySelector("[data-print]").onclick = () => printReport(reportSheetHTML(r));
+}
+
+function printReport(html) {
+  let root = document.getElementById("printRoot");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "printRoot";
+    document.body.appendChild(root);
+  }
+  root.innerHTML = html;
+  window.print();
 }
 
 /* ============ 멤버 관리 ============ */
@@ -1962,6 +2023,7 @@ async function handleAction(act, el) {
     // 보고서
     case "report-add": return reportForm();
     case "report-auto": return reportForm(null, buildAutoReportDraft());
+    case "report-submit": return openReportPreview(find("reports"));
     case "report-edit": return reportForm(find("reports"));
     case "report-del":
       if (await UI.confirmBox("이 보고서를 삭제할까요?")) await Store.remove("reports", id);

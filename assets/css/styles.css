@@ -467,6 +467,30 @@ a { color: inherit; }
 .img-preview img { max-width: 100%; max-height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); }
 .modal-foot { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
 
+/* ===== 제출용 보고서 양식 ===== */
+.report-modal { max-width: 640px; }
+.report-preview-body { display: block !important; }
+.report-sheet { font-size: 13.5px; color: var(--ink); }
+.report-sheet h1 { text-align: center; font-size: 21px; font-weight: 800; margin: 4px 0 18px; letter-spacing: -0.5px; }
+.rs-meta { display: flex; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 18px; }
+.rs-meta > div { flex: 1; display: flex; align-items: stretch; }
+.rs-meta > div + div { border-left: 1px solid var(--line-2); }
+.rs-meta > div span { background: var(--panel-2); padding: 9px 12px; font-size: 12px; color: var(--muted); font-weight: 700; display: flex; align-items: center; }
+.rs-meta > div b { padding: 9px 12px; display: flex; align-items: center; }
+.report-sheet section { margin-bottom: 14px; }
+.report-sheet section h3 { font-size: 14px; font-weight: 800; margin: 0 0 7px; padding: 7px 12px; background: var(--brand-soft); color: var(--brand-dark); border-radius: 8px; }
+.report-sheet section > div { padding: 4px 12px; line-height: 1.75; min-height: 26px; white-space: normal; }
+
+#printRoot { display: none; }
+@media print {
+  body > * { display: none !important; }
+  #printRoot { display: block !important; padding: 28px 24px; }
+  #printRoot .report-sheet h1 { font-size: 23px; }
+  #printRoot .rs-meta, #printRoot .report-sheet section h3 {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+}
+
 /* ===== 토스트 ===== */
 .toast {
   position: fixed; bottom: 28px; left: 50%; transform: translate(-50%, 20px);
