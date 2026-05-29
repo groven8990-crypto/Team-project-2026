@@ -1271,26 +1271,11 @@ function renderDBMeetings() {
     .slice()
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const list = items.length
-    ? items
-        .map(
-          (m) => `
-        <div class="card">
-          <div class="card-top"><strong>${UI.esc(m.title)}</strong><span class="muted">${UI.fmtDate(
-            m.date
-          )}</span></div>
-          ${m.attendees ? `<div class="muted">참석: ${UI.esc(m.attendees)}</div>` : ""}
-          ${m.body ? `<p class="card-desc">${UI.nl2br(m.body)}</p>` : ""}
-          <div class="card-actions">
-            <button class="btn xs ghost" data-act="meeting-edit" data-id="${m.id}">수정</button>
-            <button class="btn xs danger" data-act="meeting-del" data-id="${m.id}">삭제</button>
-          </div>
-        </div>`
-        )
-        .join("")
+    ? items.map((m) => meetingCard(m)).join("")
     : `<div class="empty">미팅 기록이 없습니다.</div>`;
   return `
     <div class="sub-head">
-      <p class="muted">간단한 미팅 기록입니다. 정식 회의록은 상단 '회의록' 탭에서 관리하세요. (같은 데이터)</p>
+      <p class="muted">상단 '회의록' 탭과 같은 데이터입니다. 여기서도 추가/수정할 수 있어요.</p>
       <button class="btn primary" data-act="meeting-add">+ 미팅 추가</button>
     </div>
     <div class="list">${list}</div>`;
@@ -1399,56 +1384,93 @@ async function linkForm(existing) {
 }
 
 /* ============ 회의록 ============ */
+function meetingItemsTable(items) {
+  if (!Array.isArray(items) || !items.length) return "";
+  const rows = items
+    .map(
+      (it) => `
+      <tr class="${it.done ? "done" : ""}">
+        <td class="ta-c">${it.done ? "✅" : "⬜"}</td>
+        <td>${UI.esc(it.agenda || "")}</td>
+        <td class="ta-c">${it.owner ? UI.esc(it.owner) : "-"}</td>
+        <td class="ta-c nowrap">${it.due ? UI.fmtDate(it.due) : "-"}</td>
+      </tr>`
+    )
+    .join("");
+  return `
+    <table class="meeting-items">
+      <thead><tr><th>완료</th><th>안건 및 결과</th><th>담당</th><th>기한</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function meetingCard(m) {
+  return `
+    <div class="card meeting-card">
+      <div class="meeting-head">
+        <div class="meeting-title-row">
+          ${m.category ? `<span class="meeting-cat">${UI.esc(m.category)}</span>` : ""}
+          <strong>${UI.esc(m.title)}</strong>
+        </div>
+        <span class="muted">📅 ${UI.fmtDate(m.date)}${m.time ? " " + UI.esc(m.time) : ""}</span>
+      </div>
+      <div class="meeting-fields">
+        ${m.location ? `<span><b>장소</b> ${UI.esc(m.location)}</span>` : ""}
+        ${m.attendees ? `<span><b>참석자</b> ${UI.esc(m.attendees)}</span>` : ""}
+        <span><b>F/u</b> ${m.fu_status ? "✅ 완료" : "⬜ 미완료"}</span>
+      </div>
+      ${meetingItemsTable(m.items)}
+      ${m.agenda ? `<div class="meeting-row"><b>안건</b><div>${UI.nl2br(m.agenda)}</div></div>` : ""}
+      ${m.body ? `<div class="meeting-row"><b>내용</b><div>${UI.nl2br(m.body)}</div></div>` : ""}
+      ${m.remarks ? `<div class="meeting-row"><b>비고</b><div>${UI.nl2br(m.remarks)}</div></div>` : ""}
+      <div class="card-meta">작성: ${UI.memberChip(m.member_id)}</div>
+      <div class="card-actions">
+        <button class="btn xs ghost" data-act="meeting-duplicate" data-id="${m.id}">📑 복제</button>
+        <button class="btn xs ghost" data-act="meeting-edit" data-id="${m.id}">수정</button>
+        <button class="btn xs danger" data-act="meeting-del" data-id="${m.id}">삭제</button>
+      </div>
+    </div>`;
+}
+
 function renderMinutes() {
   const items = Store.list("meetings")
     .slice()
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const list = items.length
-    ? items
-        .map(
-          (m) => `
-        <div class="card meeting-card">
-          <div class="card-top">
-            <strong>${UI.esc(m.title)}</strong>
-            <span class="muted">${UI.fmtDate(m.date)}</span>
-          </div>
-          ${m.attendees ? `<div class="meeting-row"><b>참석자</b> ${UI.esc(m.attendees)}</div>` : ""}
-          ${m.agenda ? `<div class="meeting-row"><b>안건</b><div>${UI.nl2br(m.agenda)}</div></div>` : ""}
-          ${m.body ? `<div class="meeting-row"><b>내용</b><div>${UI.nl2br(m.body)}</div></div>` : ""}
-          <div class="card-meta">작성: ${UI.memberChip(m.member_id)}</div>
-          <div class="card-actions">
-            <button class="btn xs ghost" data-act="meeting-edit" data-id="${m.id}">수정</button>
-            <button class="btn xs danger" data-act="meeting-del" data-id="${m.id}">삭제</button>
-          </div>
-        </div>`
-        )
-        .join("")
-    : `<div class="empty">작성된 회의록이 없습니다.</div>`;
+    ? items.map((m) => meetingCard(m)).join("")
+    : `<div class="empty">작성된 회의록이 없습니다. "+ 회의록 작성"으로 양식을 불러와 작성하세요.</div>`;
   return `
     <section class="view">
       <div class="view-head">
         <h2>회의록</h2>
         <button class="btn primary" data-act="meeting-add">+ 회의록 작성</button>
       </div>
+      <p class="muted">모든 회의에는 목적이 있죠. 회의가 끝나면 안건·결과·후속과제(담당/기한)까지 기록해 챙겨보세요.</p>
       <div class="list">${list}</div>
     </section>`;
 }
 
 async function meetingForm(existing) {
-  const values = existing || {
-    member_id: curUser(),
-    date: UI.todayInput(),
-    attendees: Store.list("members")
-      .map((m) => m.name)
-      .join(", "),
-  };
+  const values = existing
+    ? { ...existing, fu_status: existing.fu_status ? "yes" : "" }
+    : {
+        member_id: curUser(),
+        date: UI.todayInput(),
+        attendees: Store.list("members")
+          .map((m) => m.name)
+          .join(", "),
+        items: [{}, {}],
+      };
   const res = await UI.formModal({
     title: existing ? "회의록 수정" : "회의록 작성",
     submitText: existing ? "수정" : "저장",
     values,
     fields: [
-      { name: "title", label: "회의 제목", type: "text", required: true, full: true },
-      { name: "date", label: "날짜", type: "date", required: true },
+      { name: "title", label: "회의명", type: "text", required: true, full: true },
+      { name: "category", label: "구분", type: "text", placeholder: "예: 정기회의 / 업무1" },
+      { name: "date", label: "회의일시 (날짜)", type: "date", required: true },
+      { name: "time", label: "시간", type: "text", placeholder: "예: 오전 10:00" },
+      { name: "location", label: "회의장소", type: "text" },
       {
         name: "member_id",
         label: "작성자",
@@ -1456,14 +1478,45 @@ async function meetingForm(existing) {
         options: UI.memberOptions(false),
       },
       { name: "attendees", label: "참석자", type: "text", full: true },
-      { name: "agenda", label: "안건", type: "textarea", rows: 3, full: true },
-      { name: "body", label: "회의 내용 / 결정사항", type: "textarea", rows: 6, full: true },
+      { name: "items", label: "안건 및 결과", type: "items", full: true },
+      { name: "body", label: "회의 내용 / 메모", type: "textarea", rows: 4, full: true },
+      { name: "remarks", label: "비고", type: "text", full: true },
+      {
+        name: "fu_status",
+        label: "F/u 상태 (후속과제 완료)",
+        type: "select",
+        options: [
+          { value: "", label: "⬜ 미완료" },
+          { value: "yes", label: "✅ 완료" },
+        ],
+      },
     ],
   });
   if (!res) return;
+  res.fu_status = res.fu_status === "yes";
   if (existing) await Store.update("meetings", existing.id, res);
   else await Store.add("meetings", res);
   UI.toast("회의록이 저장되었습니다");
+}
+
+async function duplicateMeeting(id) {
+  const m = Store.list("meetings").find((x) => x.id === id);
+  if (!m) return;
+  const copy = {
+    title: m.title + " (복사본)",
+    category: m.category,
+    date: UI.todayInput(),
+    time: m.time,
+    location: m.location,
+    attendees: m.attendees,
+    items: Array.isArray(m.items) ? m.items.map((it) => ({ ...it, done: false })) : [],
+    body: m.body,
+    remarks: m.remarks,
+    fu_status: false,
+    member_id: curUser() || m.member_id,
+  };
+  await Store.add("meetings", copy);
+  UI.toast("복제되었습니다");
 }
 
 /* ============ KPT 회고 ============ */
@@ -1894,6 +1947,7 @@ async function handleAction(act, el) {
     // 회의록 / 미팅 (공용)
     case "meeting-add": return meetingForm();
     case "meeting-edit": return meetingForm(find("meetings"));
+    case "meeting-duplicate": return duplicateMeeting(id);
     case "meeting-del":
       if (await UI.confirmBox("이 기록을 삭제할까요?")) await Store.remove("meetings", id);
       return;

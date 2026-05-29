@@ -52,9 +52,15 @@ create table if not exists meetings (
   id text primary key,
   title text not null,
   date text,
+  time text,                         -- 회의 시간 (예: 오전 10:00)
+  category text,                     -- 구분
+  location text,                     -- 회의장소
   attendees text,
   agenda text,
   body text,
+  remarks text,                      -- 비고
+  fu_status boolean default false,   -- F/u(후속과제) 완료 여부
+  items jsonb default '[]'::jsonb,   -- 안건 및 결과 [{agenda,owner,due,done}]
   member_id text,
   created_at timestamptz default now(),
   updated_at timestamptz
