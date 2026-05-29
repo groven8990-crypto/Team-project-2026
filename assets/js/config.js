@@ -12,9 +12,9 @@
  */
 window.APP_CONFIG = {
   // 예: "https://abcdefgh.supabase.co"
-  SUPABASE_URL: "",
-  // 예: "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_URL: "https://yksoewfdcykladmsoaqt.supabase.co",
+  // 예: "eyJhbGciOiJIUzI1NiIsInR5cCI6..." (또는 sb_publishable_... 공개키)
+  SUPABASE_ANON_KEY: "sb_publishable_AZENTNz_R3CB8KAvAmXaMQ_NIOTknjN",
 
   APP_TITLE: "업무 공유",
 };
