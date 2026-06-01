@@ -1229,7 +1229,6 @@ function highlightItem(e) {
     <div class="hl-item">
       <span class="hl-date">${UI.fmtDate(e.date)}</span>
       <span class="hl-title">${UI.esc(e.title)}</span>
-      ${UI.memberChip(e.member_id)}
       ${memberDots(e.participants)}
       <span class="hl-actions">
         <button class="btn xs ghost" data-act="event-edit" data-id="${e.id}">수정</button>
