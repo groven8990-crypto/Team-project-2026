@@ -2736,11 +2736,24 @@ function bindGlobalEvents() {
       App.state.kptMineOnly = e.target.checked;
       render();
     }
-    // 진행률 인라인 수정 (대시보드)
+    // 진행률 인라인 수정 (대시보드) — 진행률에 따라 상태도 자동 변경
     if (e.target.classList.contains("prog-range") || e.target.classList.contains("pt-prog")) {
-      let v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
-      Store.update("tasks", e.target.getAttribute("data-id"), { progress: String(v) });
-      UI.toast("진행률 " + v + "% 저장");
+      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+      const id = e.target.getAttribute("data-id");
+      const patch = { progress: String(v) };
+      let statusLabel = "";
+      if (v >= 100) {
+        patch.status = "done";
+        statusLabel = " · 완료";
+      } else if (v > 0) {
+        patch.status = "doing";
+        statusLabel = " · 진행 중";
+      } else {
+        patch.status = "todo";
+        statusLabel = " · 할 일";
+      }
+      Store.update("tasks", id, patch);
+      UI.toast("진행률 " + v + "%" + statusLabel);
     }
   });
 
