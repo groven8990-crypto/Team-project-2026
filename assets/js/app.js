@@ -1200,6 +1200,21 @@ function renderCalendar() {
     </section>`;
 }
 
+function memberDots(ids) {
+  if (!Array.isArray(ids) || !ids.length) return "";
+  const dots = ids
+    .map((id) => {
+      const m = Store.list("members").find((x) => x.id === id);
+      const color = m ? m.color || "#64748b" : "#cbd5e1";
+      const name = m ? m.name : "참여자";
+      return `<span class="mdot" style="background:${UI.esc(color)}" title="${UI.esc(
+        name
+      )}"></span>`;
+    })
+    .join("");
+  return `<span class="mdots">${dots}</span>`;
+}
+
 function participantChips(ids) {
   if (!Array.isArray(ids) || !ids.length) return "";
   return (
@@ -1215,7 +1230,7 @@ function highlightItem(e) {
       <span class="hl-date">${UI.fmtDate(e.date)}</span>
       <span class="hl-title">${UI.esc(e.title)}</span>
       ${UI.memberChip(e.member_id)}
-      ${participantChips(e.participants)}
+      ${memberDots(e.participants)}
       <span class="hl-actions">
         <button class="btn xs ghost" data-act="event-edit" data-id="${e.id}">수정</button>
         <button class="btn xs danger" data-act="event-del" data-id="${e.id}">삭제</button>
@@ -1251,9 +1266,16 @@ function calendarGrid(year, month, events) {
       .slice(0, 4)
       .map(
         (e) =>
-          `<div class="cal-ev scope-${e.scope || "day"}" data-act="event-edit" data-id="${
+          `<div class="cal-ev-wrap">
+             <div class="cal-ev scope-${e.scope || "day"}" data-act="event-edit" data-id="${
             e.id
-          }" title="${UI.esc(e.title)}">${UI.esc(e.title)}</div>`
+          }" title="${UI.esc(e.title)}">${UI.esc(e.title)}</div>
+             ${
+               Array.isArray(e.participants) && e.participants.length
+                 ? `<div class="cal-ev-dots">${memberDots(e.participants)}</div>`
+                 : ""
+             }
+           </div>`
       )
       .join("");
     const more =

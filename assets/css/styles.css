@@ -542,6 +542,13 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 /* 참여자 칩 묶음 */
 .participants { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11px; }
 
+/* 멤버 색 점 (참여자) */
+.mdots { display: inline-flex; align-items: center; gap: 3px; }
+.mdot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(15,23,42,.08); }
+.cal-ev-wrap { margin-bottom: 3px; }
+.cal-ev-dots { display: flex; gap: 3px; padding: 2px 0 0 3px; }
+.cal-ev-dots .mdot { width: 7px; height: 7px; border-width: 1px; }
+
 /* 검색형 멀티 선택 (참여자) */
 .memsearch { position: relative; }
 .ms-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
