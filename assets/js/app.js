@@ -2397,8 +2397,16 @@ function renderMembers() {
   const list = members.length
     ? members
         .map(
-          (m) => `
+          (m, i) => `
         <div class="card member-card">
+          <span class="member-order">
+            <button class="ord-btn" data-act="member-up" data-id="${m.id}" ${
+            i === 0 ? "disabled" : ""
+          } title="위로">▲</button>
+            <button class="ord-btn" data-act="member-down" data-id="${m.id}" ${
+            i === members.length - 1 ? "disabled" : ""
+          } title="아래로">▼</button>
+          </span>
           <span class="member-dot" style="background:${UI.esc(m.color)}"></span>
           <strong>${UI.esc(m.name)}</strong>
           ${m.id === cur ? `<span class="chip chip-me">나</span>` : ""}
@@ -2416,9 +2424,25 @@ function renderMembers() {
         <h2>멤버 관리</h2>
         <button class="btn primary" data-act="member-add">+ 멤버 등록</button>
       </div>
-      <p class="muted">팀원 이름을 등록하면 담당자 지정, 작성자 표시, KPT 회고 필터 등에 사용됩니다.</p>
+      <p class="muted">▲▼ 버튼으로 순서를 바꿀 수 있어요. 이 순서가 사람별 보기·취합 보고서 등에 그대로 쓰입니다.</p>
       <div class="member-list">${list}</div>
     </section>`;
+}
+
+/* 멤버 순서 이동 */
+async function moveMember(id, dir) {
+  const ms = Store.list("members").slice();
+  const i = ms.findIndex((m) => m.id === id);
+  if (i < 0) return;
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (j < 0 || j >= ms.length) return;
+  const tmp = ms[i];
+  ms[i] = ms[j];
+  ms[j] = tmp;
+  // 현재 순서대로 sort 값 재부여 (바뀐 것만 저장)
+  for (let k = 0; k < ms.length; k++) {
+    if (Number(ms[k].sort) !== k) await Store.update("members", ms[k].id, { sort: k });
+  }
 }
 
 async function memberForm(existing) {
@@ -2729,6 +2753,8 @@ async function handleAction(act, el) {
     // 멤버
     case "member-add": return memberForm();
     case "member-edit": return memberForm(find("members"));
+    case "member-up": return moveMember(id, "up");
+    case "member-down": return moveMember(id, "down");
     case "member-del":
       if (await UI.confirmBox("이 멤버를 삭제할까요?")) {
         await Store.remove("members", id);

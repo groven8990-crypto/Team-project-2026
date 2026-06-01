@@ -121,7 +121,17 @@ const Store = (function () {
 
   /* ---------------- 공개 API ---------------- */
   function list(collection) {
-    return cache[collection] || [];
+    const arr = cache[collection] || [];
+    if (collection === "members") {
+      const key = (m) => (m.sort == null || m.sort === "" ? 9999 : Number(m.sort));
+      return arr
+        .slice()
+        .sort(
+          (a, b) =>
+            key(a) - key(b) || (a.created_at || "").localeCompare(b.created_at || "")
+        );
+    }
+    return arr;
   }
 
   /* PostgREST 에러에서 없는 컬럼명 추출 */

@@ -11,6 +11,7 @@ create table if not exists members (
   id text primary key,
   name text not null,
   color text,
+  sort int,                          -- 표시 순서
   created_at timestamptz default now(),
   updated_at timestamptz
 );

@@ -392,6 +392,14 @@ a { color: inherit; }
 .member-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .member-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .member-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.member-order { display: inline-flex; flex-direction: column; gap: 2px; margin-right: 2px; }
+.ord-btn {
+  border: 1px solid var(--line-2); background: #fff; border-radius: 6px; width: 22px; height: 18px;
+  font-size: 9px; line-height: 1; cursor: pointer; color: var(--muted); padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ord-btn:hover:not(:disabled) { background: var(--brand-soft); color: var(--brand-dark); }
+.ord-btn:disabled { opacity: .3; cursor: default; }
 .member-card .card-actions { margin-top: 0; margin-left: auto; }
 
 /* ===== 업무 문서 (SOP) ===== */
