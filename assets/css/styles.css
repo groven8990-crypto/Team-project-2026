@@ -542,12 +542,17 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 /* 참여자 칩 묶음 */
 .participants { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11px; }
 
-/* 멤버 색 점 (참여자) */
+/* 멤버 성(첫 글자) 색 동그라미 (참여자) */
 .mdots { display: inline-flex; align-items: center; gap: 3px; }
-.mdot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(15,23,42,.08); }
+.mavatar {
+  width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 10px;
+  font-weight: 800; display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(15,23,42,.08); flex-shrink: 0;
+  letter-spacing: -0.5px;
+}
 .cal-ev-wrap { margin-bottom: 3px; }
-.cal-ev-dots { display: flex; gap: 3px; padding: 2px 0 0 3px; }
-.cal-ev-dots .mdot { width: 7px; height: 7px; border-width: 1px; }
+.cal-ev-dots { display: flex; gap: 2px; padding: 2px 0 0 3px; flex-wrap: wrap; }
+.cal-ev-dots .mavatar { width: 16px; height: 16px; font-size: 9px; border-width: 1px; }
 
 /* 검색형 멀티 선택 (참여자) */
 .memsearch { position: relative; }

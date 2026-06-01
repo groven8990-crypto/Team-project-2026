@@ -1206,10 +1206,11 @@ function memberDots(ids) {
     .map((id) => {
       const m = Store.list("members").find((x) => x.id === id);
       const color = m ? m.color || "#64748b" : "#cbd5e1";
-      const name = m ? m.name : "참여자";
-      return `<span class="mdot" style="background:${UI.esc(color)}" title="${UI.esc(
+      const name = m ? m.name : "?";
+      const initial = (name.trim()[0] || "?");
+      return `<span class="mavatar" style="background:${UI.esc(color)}" title="${UI.esc(
         name
-      )}"></span>`;
+      )}">${UI.esc(initial)}</span>`;
     })
     .join("");
   return `<span class="mdots">${dots}</span>`;
