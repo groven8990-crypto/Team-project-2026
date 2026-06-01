@@ -27,6 +27,94 @@ const GOAL_STATUS = [
 ];
 const GRADES = ["미평가", "S", "A", "B", "C"];
 
+/* 페이지별 사용법 (하단 안내) */
+const HELP = {
+  home: {
+    title: "홈 사용법",
+    items: [
+      "팀 업무 현황을 한눈에 모아 보는 화면이에요.",
+      "상단 버튼으로 할 일·일정·오늘 보고를 바로 추가할 수 있어요.",
+      "각 카드의 '더보기 ›'를 누르면 해당 탭으로 이동합니다.",
+      "우측 상단에서 본인 이름을 먼저 선택하면 작성자가 자동 지정돼요.",
+    ],
+  },
+  dashboard: {
+    title: "할일 대시보드 사용법",
+    items: [
+      "'+ 할 일 추가'로 업무를 등록하고 담당자·마감일·진행률을 지정해요.",
+      "사람별 보기: 팀원마다 담당 업무를 모아 봅니다. 슬라이더를 움직여 진행률을 바로 조절해요.",
+      "전체 보기: 할 일 → 진행 중 → 완료 칸반. 카드의 ▶/✓ 버튼으로 상태를 옮겨요.",
+      "상단 필터(전체/내 할일/이름)로 특정 사람 업무만 볼 수 있어요.",
+    ],
+  },
+  goals: {
+    title: "업무 목표 사용법",
+    items: [
+      "연간·분기 중점과제와 평가지표를 관리하는 곳이에요.",
+      "테이블 보기 / 상태별 보기를 토글할 수 있어요.",
+      "비중(%)과 진행률(%)을 입력하면 막대로 표시되고, 평가등급(S/A/B/C)을 줄 수 있어요.",
+    ],
+  },
+  docs: {
+    title: "업무 문서(SOP) 사용법",
+    items: [
+      "업무 표준·매뉴얼을 폴더(카테고리)별로 정리해요. 왼쪽 검색으로 빠르게 찾습니다.",
+      "'⭐ 양식으로 만들기'로 SOP 기본 틀을 불러와 작성하세요.",
+      "'📑 복제'로 양식을 복사해 다양한 문서로 활용할 수 있어요.",
+      "내용은 # 제목, - 목록, **굵게** 같은 간단 서식을 지원합니다.",
+    ],
+  },
+  calendar: {
+    title: "캘린더 사용법",
+    items: [
+      "달력의 날짜 칸을 클릭하면 그 날짜로 일정을 바로 추가해요.",
+      "구분을 '주별/월별'로 하면 달력 위쪽에 따로 강조되어 표시됩니다.",
+      "일정에 작성자와 참여자(여러 명)를 지정할 수 있어요.",
+    ],
+  },
+  databoard: {
+    title: "데이터 보드 사용법",
+    items: [
+      "자료실: 사진·이미지·링크를 올려 팀이 함께 봐요.",
+      "미팅: 회의 기록(상단 '회의록' 탭과 같은 데이터)을 남겨요.",
+      "아이디어 노트·링크: 떠오르는 생각과 자주 쓰는 링크를 모아둬요.",
+    ],
+  },
+  minutes: {
+    title: "회의록 사용법",
+    items: [
+      "'+ 회의록 작성'으로 구분·일시·장소·참석자를 기록해요.",
+      "'안건 및 결과' 표에서 안건마다 담당·기한·완료여부를 적고 '+ 행 추가'로 늘려요.",
+      "'📑 복제'로 같은 양식을 재사용하고, F/u 상태로 후속과제를 관리해요.",
+    ],
+  },
+  kpt: {
+    title: "KPT 회고 사용법",
+    items: [
+      "Keep(유지할 것)·Problem(문제점)·Try(개선점)를 적는 회고예요.",
+      "'내가 쓴 회고만 보기'로 본인 회고만 필터링할 수 있어요.",
+      "우측 상단에서 본인 이름을 선택해야 '내 회고' 필터가 동작해요.",
+    ],
+  },
+  reports: {
+    title: "보고서 사용법",
+    items: [
+      "일일 보고서: '⚡ 자동생성'은 오늘 완료/진행 업무를 진행률과 함께 모아 초안을 만들어요.",
+      "주간 보고서: 한 주 실적·다음 주 계획을 정리하고, 이번 주 일일보고를 모아 자동 작성할 수 있어요.",
+      "날짜별 취합: 달력에서 날짜를 누르면 그날 팀원 보고가 모이고, '취합 제출 양식'으로 한 장에 인쇄·PDF 저장돼요.",
+      "'📄 제출 양식'에서 인쇄(PDF 저장)하면 보고서만 깔끔하게 출력됩니다.",
+    ],
+  },
+  members: {
+    title: "멤버 관리 사용법",
+    items: [
+      "팀원 이름과 색상을 등록해요. 색상은 동그라미를 클릭해 고릅니다.",
+      "이름은 담당자 지정·작성자 표시·회고 필터에 사용돼요.",
+      "본인 정보를 바꾸려면 본인 카드의 '수정'을 누르세요.",
+    ],
+  },
+};
+
 const MEMBER_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4",
   "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#64748b",
@@ -44,6 +132,7 @@ const App = {
     goalView: "table", // 업무 목표 보기: table | board
     docSelectedId: null, // 선택한 업무 문서
     docSearch: "", // 문서 검색어
+    helpOpen: true, // 페이지 하단 사용법 표시
     reportTab: "daily", // 보고서 보기: daily | weekly | collect
     reportDate: null, // 취합 보기 선택 날짜
     reportCalRef: new Date(), // 취합 캘린더 기준 월
@@ -483,14 +572,17 @@ function personTaskRow(t) {
           ? `<span class="pt-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date)}</span>`
           : ""
       }
+      <span class="pt-lead"></span>
       ${
         t.status === "done"
-          ? `<span class="pt-pct">100%</span>`
-          : `<input type="number" class="pt-prog" data-id="${t.id}" value="${
-              parseInt(t.progress) || 0
-            }" min="0" max="100" step="5" title="진행률 %">`
+          ? `<span class="pt-progbox done">✅ 100%</span>`
+          : `<span class="pt-progbox" title="진행률">
+               <input type="range" min="0" max="100" step="5" value="${
+                 parseInt(t.progress) || 0
+               }" class="prog-range mini" data-id="${t.id}">
+               <span class="prog-edit-num">${parseInt(t.progress) || 0}%</span>
+             </span>`
       }
-      <span class="pt-lead"></span>
       <span class="pt-status status-${t.status}">${meta.label}</span>
       <span class="pt-actions">
         <button class="btn xs primary" data-act="task-move" data-id="${t.id}" data-to="${next}">${nextLabel}</button>
@@ -1083,12 +1175,22 @@ function renderCalendar() {
     </section>`;
 }
 
+function participantChips(ids) {
+  if (!Array.isArray(ids) || !ids.length) return "";
+  return (
+    `<span class="participants">👥 ` +
+    ids.map((id) => UI.memberChip(id)).join("") +
+    `</span>`
+  );
+}
+
 function highlightItem(e) {
   return `
     <div class="hl-item">
       <span class="hl-date">${UI.fmtDate(e.date)}</span>
       <span class="hl-title">${UI.esc(e.title)}</span>
       ${UI.memberChip(e.member_id)}
+      ${participantChips(e.participants)}
       <span class="hl-actions">
         <button class="btn xs ghost" data-act="event-edit" data-id="${e.id}">수정</button>
         <button class="btn xs danger" data-act="event-del" data-id="${e.id}">삭제</button>
@@ -1174,8 +1276,15 @@ async function eventForm(existing, presetDate) {
       },
       {
         name: "member_id",
-        label: "담당/작성자",
+        label: "작성자",
         type: "select",
+        options: UI.memberOptions(false),
+      },
+      {
+        name: "participants",
+        label: "참여자 (여러 명 선택 가능)",
+        type: "checks",
+        full: true,
         options: UI.memberOptions(false),
       },
       { name: "note", label: "메모", type: "textarea", full: true },
@@ -2209,10 +2318,29 @@ function render() {
   root.innerHTML = `
     ${renderHeader()}
     ${renderNav()}
-    <main class="app-main">${view}</main>
+    <main class="app-main">${view}${renderHelp()}</main>
     <footer class="app-footer">업무 공유 · ${
       Store.mode === "cloud" ? "실시간 공유 모드" : "로컬 모드"
     }</footer>`;
+}
+
+function renderHelp() {
+  const h = HELP[App.route] || HELP.home;
+  const open = App.state.helpOpen;
+  return `
+    <div class="help-box ${open ? "open" : ""}">
+      <button class="help-head" data-act="toggle-help">
+        <span>ℹ️ ${UI.esc(h.title)}</span>
+        <span class="help-arrow">${open ? "▲" : "▼"}</span>
+      </button>
+      ${
+        open
+          ? `<ul class="help-list">${h.items
+              .map((t) => `<li>${UI.esc(t)}</li>`)
+              .join("")}</ul>`
+          : ""
+      }
+    </div>`;
 }
 
 /* ============ 이벤트 위임 ============ */
@@ -2221,6 +2349,12 @@ async function handleAction(act, el) {
   const find = (coll) => Store.list(coll).find((x) => x.id === id);
 
   switch (act) {
+    // 공통
+    case "toggle-help":
+      App.state.helpOpen = !App.state.helpOpen;
+      render();
+      return;
+
     // 할일
     case "task-view":
       App.state.taskView = el.getAttribute("data-view");

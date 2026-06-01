@@ -33,6 +33,7 @@ create table if not exists events (
   date text,
   scope text default 'day',          -- day | week | month
   member_id text,
+  participants jsonb default '[]'::jsonb,  -- 참여자 멤버 id 배열
   note text,
   created_at timestamptz default now(),
   updated_at timestamptz

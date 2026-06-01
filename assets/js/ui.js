@@ -138,6 +138,25 @@ const UI = (function () {
                    <div class="img-preview" id="${id}_preview">${
             initial ? `<img src="${esc(initial)}">` : ""
           }</div>`;
+        } else if (f.type === "checks") {
+          const sel = Array.isArray(initial) ? initial : [];
+          const opts = f.options || [];
+          html += `<div class="checks" id="${id}">
+            ${
+              opts.length
+                ? opts
+                    .map(
+                      (o) =>
+                        `<label class="check-item"><input type="checkbox" value="${esc(
+                          o.value
+                        )}" ${sel.includes(o.value) ? "checked" : ""}> ${esc(
+                          o.label
+                        )}</label>`
+                    )
+                    .join("")
+                : `<span class="muted">선택지가 없습니다 (멤버를 먼저 등록하세요)</span>`
+            }
+          </div>`;
         } else if (f.type === "color") {
           const colors = f.options || [];
           html += `<div class="color-picker" id="${id}">
@@ -259,6 +278,11 @@ const UI = (function () {
           if (f.type === "static") continue;
           if (f.type === "image") {
             out[f.name] = imageData[f.name] || "";
+            continue;
+          }
+          if (f.type === "checks") {
+            const box = form.querySelector(`#f_${f.name}`);
+            out[f.name] = [...box.querySelectorAll("input:checked")].map((i) => i.value);
             continue;
           }
           if (f.type === "color") {
