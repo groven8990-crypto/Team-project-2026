@@ -204,6 +204,32 @@ function renderNav() {
 }
 
 /* ============ 홈 (전체 한눈에 보기) ============ */
+/* 매일 바뀌는 응원 인사말 (같은 날엔 고정) */
+const GREETINGS = [
+  "오늘도 화이팅이에요",
+  "오늘도 좋은 하루 보내요",
+  "할 수 있어요, 오늘도 파이팅",
+  "오늘도 한 걸음씩 나아가요",
+  "당신의 하루를 응원해요",
+  "오늘도 멋진 하루 만들어요",
+  "차근차근, 오늘도 잘 될 거예요",
+  "오늘도 우리 팀 최고예요",
+  "기분 좋은 하루 되세요",
+  "오늘도 수고가 많아요",
+  "작은 진전도 큰 성과예요",
+  "오늘도 활기차게 시작해요",
+  "좋은 일이 가득할 거예요",
+  "오늘도 즐겁게 일해봐요",
+  "한 주도 알차게 채워가요",
+  "오늘의 노력이 내일을 만들어요",
+  "커피 한 잔의 여유도 잊지 마세요",
+  "오늘도 반가워요, 함께 달려요",
+];
+function dailyGreeting() {
+  const dayIndex = Math.floor(Date.now() / 86400000); // 날짜(일) 단위
+  return GREETINGS[dayIndex % GREETINGS.length];
+}
+
 function renderHome() {
   const today = UI.todayInput();
   const tasks = Store.list("tasks");
@@ -217,8 +243,7 @@ function renderHome() {
 
   const me = curUser();
   const greetName = me ? UI.memberName(me) + "님" : "";
-  const hour = new Date().getHours();
-  const greet = hour < 11 ? "좋은 아침이에요" : hour < 18 ? "오늘도 화이팅이에요" : "오늘도 수고하셨어요";
+  const greet = dailyGreeting();
 
   // 통계
   const counts = {
