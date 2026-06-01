@@ -124,21 +124,77 @@ const Store = (function () {
     return cache[collection] || [];
   }
 
+  /* PostgREST 에러에서 없는 컬럼명 추출 */
+  function missingColumn(msg) {
+    const m = /Could not find the '([^']+)' column/.exec(msg || "");
+    return m ? m[1] : null;
+  }
+
+  /* 없는 컬럼은 자동으로 빼고 재시도하는 insert */
+  async function cloudInsert(collection, row) {
+    let payload = Object.assign({}, row);
+    const dropped = [];
+    for (let i = 0; i < 12; i++) {
+      const { data, error } = await supa
+        .from(collection)
+        .insert(payload)
+        .select()
+        .single();
+      if (!error) return { data, dropped };
+      const col = missingColumn(error.message);
+      if (col && col in payload) {
+        delete payload[col];
+        dropped.push(col);
+        continue;
+      }
+      return { error, dropped };
+    }
+    return { error: { message: "재시도 횟수를 초과했습니다" }, dropped };
+  }
+
+  async function cloudUpdate(collection, id, patch) {
+    let payload = Object.assign({}, patch);
+    const dropped = [];
+    for (let i = 0; i < 12; i++) {
+      const { data, error } = await supa
+        .from(collection)
+        .update(payload)
+        .eq("id", id)
+        .select()
+        .single();
+      if (!error) return { data, dropped };
+      const col = missingColumn(error.message);
+      if (col && col in payload) {
+        delete payload[col];
+        dropped.push(col);
+        continue;
+      }
+      return { error, dropped };
+    }
+    return { error: { message: "재시도 횟수를 초과했습니다" }, dropped };
+  }
+
+  function warnDropped(dropped) {
+    if (dropped && dropped.length && window.UI && UI.toast) {
+      UI.toast(
+        `일부 항목(${dropped.join(", ")})은 아직 저장칸이 없어 제외됐어요. 나머지는 저장됨`,
+        "warn"
+      );
+    }
+  }
+
   async function add(collection, obj) {
     const row = Object.assign(
       { id: uid(), created_at: nowISO() },
       obj
     );
     if (mode === "cloud") {
-      const { data, error } = await supa
-        .from(collection)
-        .insert(row)
-        .select()
-        .single();
+      const { data, error, dropped } = await cloudInsert(collection, row);
       if (error) {
         alert("저장 실패: " + error.message);
         throw error;
       }
+      warnDropped(dropped);
       // 실시간 이벤트가 늦을 수 있으니 즉시 반영
       if (!cache[collection].some((x) => x.id === data.id)) {
         cache[collection].push(data);
@@ -156,16 +212,12 @@ const Store = (function () {
   async function update(collection, id, patch) {
     const merged = Object.assign({}, patch, { updated_at: nowISO() });
     if (mode === "cloud") {
-      const { data, error } = await supa
-        .from(collection)
-        .update(merged)
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error, dropped } = await cloudUpdate(collection, id, merged);
       if (error) {
         alert("수정 실패: " + error.message);
         throw error;
       }
+      warnDropped(dropped);
       const idx = cache[collection].findIndex((x) => x.id === id);
       if (idx >= 0) cache[collection][idx] = data;
       notify();
