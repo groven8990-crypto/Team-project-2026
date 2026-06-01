@@ -164,6 +164,13 @@ const UI = (function () {
             }
             </div>
           </div>`;
+        } else if (f.type === "memsearch") {
+          // 검색해서 추가하는 멀티 선택 (체크 목록 없음)
+          html += `<div class="memsearch" id="${id}">
+            <div class="ms-chips"></div>
+            <input type="text" class="ms-input" placeholder="🔍 이름 검색해서 추가…" autocomplete="off">
+            <div class="ms-results"></div>
+          </div>`;
         } else if (f.type === "color") {
           const colors = f.options || [];
           html += `<div class="color-picker" id="${id}">
@@ -216,6 +223,85 @@ const UI = (function () {
               prev.innerHTML = `<img src="${reader.result}">`;
             };
             reader.readAsDataURL(file);
+          });
+        });
+
+      // 검색형 멀티 선택(memsearch)
+      const memSel = {};
+      fields
+        .filter((f) => f.type === "memsearch")
+        .forEach((f) => {
+          const wrap = form.querySelector(`#f_${f.name}`);
+          const chips = wrap.querySelector(".ms-chips");
+          const input = wrap.querySelector(".ms-input");
+          const results = wrap.querySelector(".ms-results");
+          const opts = f.options || [];
+          const initSel = Array.isArray(values[f.name])
+            ? values[f.name]
+            : Array.isArray(f.value)
+            ? f.value
+            : [];
+          memSel[f.name] = initSel.slice();
+
+          const labelOf = (id) => {
+            const o = opts.find((o) => String(o.value) === String(id));
+            return o ? o.label : id;
+          };
+          const drawChips = () => {
+            chips.innerHTML = memSel[f.name].length
+              ? memSel[f.name]
+                  .map(
+                    (id) =>
+                      `<span class="ms-chip">${esc(labelOf(id))}<button type="button" class="ms-remove" data-id="${esc(
+                        id
+                      )}">×</button></span>`
+                  )
+                  .join("")
+              : `<span class="ms-hint">아직 선택한 참여자가 없어요</span>`;
+          };
+          const drawResults = (q) => {
+            const ql = q.trim().toLowerCase();
+            if (!ql) {
+              results.classList.remove("show");
+              results.innerHTML = "";
+              return;
+            }
+            const matches = opts.filter(
+              (o) =>
+                !memSel[f.name].some((id) => String(id) === String(o.value)) &&
+                o.label.toLowerCase().includes(ql)
+            );
+            results.innerHTML = matches.length
+              ? matches
+                  .map(
+                    (o) =>
+                      `<button type="button" class="ms-opt" data-id="${esc(
+                        o.value
+                      )}">${esc(o.label)}</button>`
+                  )
+                  .join("")
+              : `<div class="ms-empty">검색 결과가 없어요</div>`;
+            results.classList.add("show");
+          };
+          drawChips();
+          input.addEventListener("input", () => drawResults(input.value));
+          input.addEventListener("focus", () => drawResults(input.value));
+          wrap.addEventListener("click", (e) => {
+            const opt = e.target.closest(".ms-opt");
+            if (opt) {
+              memSel[f.name].push(opt.getAttribute("data-id"));
+              input.value = "";
+              drawChips();
+              drawResults("");
+              input.focus();
+              return;
+            }
+            const rm = e.target.closest(".ms-remove");
+            if (rm) {
+              const id = rm.getAttribute("data-id");
+              memSel[f.name] = memSel[f.name].filter((x) => String(x) !== String(id));
+              drawChips();
+            }
           });
         });
 
@@ -301,6 +387,10 @@ const UI = (function () {
           if (f.type === "checks") {
             const box = form.querySelector(`#f_${f.name}`);
             out[f.name] = [...box.querySelectorAll("input:checked")].map((i) => i.value);
+            continue;
+          }
+          if (f.type === "memsearch") {
+            out[f.name] = (memSel[f.name] || []).slice();
             continue;
           }
           if (f.type === "color") {

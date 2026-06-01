@@ -1307,8 +1307,8 @@ async function eventForm(existing, presetDate) {
       },
       {
         name: "participants",
-        label: "참여자 (여러 명 선택 가능)",
-        type: "checks",
+        label: "참여자 (이름 검색해서 추가)",
+        type: "memsearch",
         full: true,
         options: UI.memberOptions(false),
       },
