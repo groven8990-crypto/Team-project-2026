@@ -390,7 +390,7 @@ function renderDashboard() {
   const toggle = `
     <div class="view-toggle">
       <button class="vt ${view === "people" ? "active" : ""}" data-act="task-view" data-view="people">👥 사람별 보기</button>
-      <button class="vt ${view === "kanban" ? "active" : ""}" data-act="task-view" data-view="kanban">▢ 칸반 보기</button>
+      <button class="vt ${view === "kanban" ? "active" : ""}" data-act="task-view" data-view="kanban">📋 전체 보기</button>
     </div>`;
 
   const body =
