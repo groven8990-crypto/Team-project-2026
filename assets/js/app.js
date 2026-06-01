@@ -1960,13 +1960,20 @@ function buildAutoReportDraft() {
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
   const doneLines = [];
-  doneToday.forEach((t) => doneLines.push(`- ${t.title} (100%)`));
-  doingTasks.forEach((t) =>
-    doneLines.push(`- ${t.title} (${parseInt(t.progress) || 0}%)`)
-  );
+  // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0)
+  doneToday.forEach((t) => doneLines.push(`- ${t.title} (완료)`));
+  doingTasks
+    .filter((t) => (parseInt(t.progress) || 0) > 0)
+    .forEach((t) => doneLines.push(`- ${t.title} (진행 ${parseInt(t.progress)}%)`));
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
-  const todoLines = todoTasks.slice(0, 10).map((t) => "- " + t.title);
+  // 내일 할 일: 대시보드의 '할 일(todo)' + 아직 안 끝난 진행 중 업무
+  const todoLines = [];
+  todoTasks.forEach((t) => todoLines.push("- " + t.title));
+  doingTasks.forEach((t) => {
+    const p = parseInt(t.progress) || 0;
+    todoLines.push(`- ${t.title}${p > 0 ? ` (이어서, ${p}%)` : ""}`);
+  });
 
   return {
     member_id: me,
@@ -2070,7 +2077,8 @@ async function weeklyReportForm(existing, preset) {
 }
 
 async function reportForm(existing, preset) {
-  const values = existing || preset || { member_id: curUser(), date: UI.todayInput() };
+  // 새로 작성할 때는 대시보드 업무를 자동으로 채워줍니다.
+  const values = existing || preset || buildAutoReportDraft();
   const res = await UI.formModal({
     title: existing ? "보고서 수정" : "일일 보고서 작성",
     submitText: existing ? "수정" : "저장",
