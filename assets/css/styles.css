@@ -469,6 +469,14 @@ a { color: inherit; }
 .img-preview img { max-width: 100%; max-height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); }
 .modal-foot { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
 
+/* 목록 검색창 */
+.search-box {
+  width: 100%; border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+  padding: 10px 14px; font-size: 13.5px; font-family: inherit; margin-bottom: 14px;
+  background: #fff;
+}
+.search-box:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
+
 /* ===== 제출용 보고서 양식 ===== */
 .report-modal { max-width: 640px; }
 .report-preview-body { display: block !important; }

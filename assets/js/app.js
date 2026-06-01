@@ -168,6 +168,8 @@ const App = {
     docSearch: "", // 문서 검색어
     helpOpen: true, // 페이지 하단 사용법 표시
     reportTab: "daily", // 보고서 보기: daily | weekly | collect
+    minutesSearch: "", // 회의록 검색어
+    reportSearch: "", // 보고서 검색어
     reportDate: null, // 취합 보기 선택 날짜
     reportCalRef: new Date(), // 취합 캘린더 기준 월
   },
@@ -1254,6 +1256,12 @@ function memberDots(ids) {
   return `<span class="mdots">${dots}</span>`;
 }
 
+/* 멤버 등록 순서 인덱스 (취합/목록 정렬용) */
+function memberOrder(memberId) {
+  const idx = Store.list("members").findIndex((m) => m.id === memberId);
+  return idx < 0 ? 9999 : idx;
+}
+
 function participantChips(ids) {
   if (!Array.isArray(ids) || !ids.length) return "";
   return (
@@ -1686,13 +1694,32 @@ function meetingCard(m) {
     </div>`;
 }
 
-function renderMinutes() {
+function meetingListHTML(q) {
+  const ql = (q || "").trim().toLowerCase();
   const items = Store.list("meetings")
     .slice()
-    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-  const list = items.length
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .filter((m) => {
+      if (!ql) return true;
+      const items = Array.isArray(m.items)
+        ? m.items.map((it) => (it.agenda || "") + " " + (it.owner || "")).join(" ")
+        : "";
+      const hay = [
+        m.title, m.category, m.location, m.attendees, m.agenda, m.body, m.remarks,
+        items, m.date, UI.fmtDate(m.date),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(ql);
+    });
+  return items.length
     ? items.map((m) => meetingCard(m)).join("")
-    : `<div class="empty">작성된 회의록이 없습니다. "+ 회의록 작성"으로 양식을 불러와 작성하세요.</div>`;
+    : `<div class="empty">${
+        ql ? "검색 결과가 없습니다." : '작성된 회의록이 없습니다. "+ 회의록 작성"으로 양식을 불러와 작성하세요.'
+      }</div>`;
+}
+
+function renderMinutes() {
   return `
     <section class="view">
       <div class="view-head">
@@ -1700,7 +1727,10 @@ function renderMinutes() {
         <button class="btn primary" data-act="meeting-add">+ 회의록 작성</button>
       </div>
       <p class="muted">모든 회의에는 목적이 있죠. 회의가 끝나면 안건·결과·후속과제(담당/기한)까지 기록해 챙겨보세요.</p>
-      <div class="list">${list}</div>
+      <input id="minutesSearch" class="search-box" type="search" placeholder="🔍 제목·내용·날짜로 검색…" value="${UI.esc(
+        App.state.minutesSearch
+      )}">
+      <div class="list" id="minutesList">${meetingListHTML(App.state.minutesSearch)}</div>
     </section>`;
 }
 
@@ -1858,19 +1888,36 @@ async function kptForm(existing) {
 }
 
 /* ============ 일일 보고서 ============ */
+function reportListHTML(tab, q) {
+  const ql = (q || "").trim().toLowerCase();
+  const items = Store.list("reports")
+    .slice()
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .filter((r) =>
+      tab === "weekly"
+        ? r.kind === "weekly"
+        : tab === "monthly"
+        ? r.kind === "monthly"
+        : isDailyReport(r)
+    )
+    .filter((r) => {
+      if (!ql) return true;
+      const hay = [
+        r.done, r.todo, r.note, r.period, r.date, UI.fmtDate(r.date),
+        UI.memberName(r.member_id),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(ql);
+    });
+  const cardFn = tab === "daily" ? dailyCard : planCard;
+  return items.length
+    ? items.map((r) => cardFn(r)).join("")
+    : `<div class="empty">${ql ? "검색 결과가 없습니다." : "작성된 보고서가 없습니다."}</div>`;
+}
+
 function renderReports() {
   const tab = App.state.reportTab;
-  const all = Store.list("reports")
-    .slice()
-    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-  const items = all.filter((r) =>
-    tab === "weekly"
-      ? r.kind === "weekly"
-      : tab === "monthly"
-      ? r.kind === "monthly"
-      : isDailyReport(r)
-  );
-
   const toggle = `
     <div class="view-toggle">
       <button class="vt ${tab === "daily" ? "active" : ""}" data-act="report-tab" data-tab="daily">📈 일일</button>
@@ -1889,11 +1936,6 @@ function renderReports() {
         ${renderReportsCollect()}
       </section>`;
   }
-
-  const cardFn = tab === "daily" ? dailyCard : planCard;
-  const cards = items.length
-    ? items.map((r) => cardFn(r)).join("")
-    : `<div class="empty">작성된 보고서가 없습니다.</div>`;
 
   let head;
   if (tab === "weekly") {
@@ -1932,7 +1974,10 @@ function renderReports() {
     <section class="view">
       ${head}
       ${toggle}
-      <div class="list">${cards}</div>
+      <input id="reportSearch" class="search-box" type="search" placeholder="🔍 내용·날짜·작성자로 검색…" value="${UI.esc(
+        App.state.reportSearch
+      )}">
+      <div class="list" id="reportList">${reportListHTML(tab, App.state.reportSearch)}</div>
     </section>`;
 }
 
@@ -1985,7 +2030,7 @@ function renderReportsCollect() {
   const date = App.state.reportDate || UI.todayInput();
   const dayReports = Store.list("reports")
     .filter((r) => isDailyReport(r) && r.date === date)
-    .sort((a, b) => UI.memberName(a.member_id).localeCompare(UI.memberName(b.member_id), "ko"));
+    .sort((a, b) => memberOrder(a.member_id) - memberOrder(b.member_id));
 
   const cards = dayReports.length
     ? dayReports.map((r) => dailyCard(r)).join("")
@@ -2073,7 +2118,7 @@ function combinedSheetHTML(date, reps) {
 function openCombinedReport(date) {
   const reps = Store.list("reports")
     .filter((r) => isDailyReport(r) && r.date === date)
-    .sort((a, b) => UI.memberName(a.member_id).localeCompare(UI.memberName(b.member_id), "ko"));
+    .sort((a, b) => memberOrder(a.member_id) - memberOrder(b.member_id));
   if (!reps.length) return;
   const text = reps.map((r) => reportToText(r)).join("\n\n────────────\n\n");
   openSheetModal(combinedSheetHTML(date, reps), text);
@@ -2712,12 +2757,22 @@ function bindGlobalEvents() {
     if (e.target.id === "dataMenuBtn") openDataMenu();
   });
 
-  // 문서 검색 (입력 중에는 트리만 갱신 → 포커스 유지)
+  // 검색 (입력 중에는 목록만 갱신 → 포커스 유지)
   document.body.addEventListener("input", (e) => {
     if (e.target.id === "docSearch") {
       App.state.docSearch = e.target.value;
       const tree = document.getElementById("docTree");
       if (tree) tree.innerHTML = docTreeHTML();
+    }
+    if (e.target.id === "minutesSearch") {
+      App.state.minutesSearch = e.target.value;
+      const list = document.getElementById("minutesList");
+      if (list) list.innerHTML = meetingListHTML(App.state.minutesSearch);
+    }
+    if (e.target.id === "reportSearch") {
+      App.state.reportSearch = e.target.value;
+      const list = document.getElementById("reportList");
+      if (list) list.innerHTML = reportListHTML(App.state.reportTab, App.state.reportSearch);
     }
   });
 
