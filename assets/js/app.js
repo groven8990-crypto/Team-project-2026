@@ -44,7 +44,9 @@ const App = {
     goalView: "table", // 업무 목표 보기: table | board
     docSelectedId: null, // 선택한 업무 문서
     docSearch: "", // 문서 검색어
-    reportTab: "daily", // 보고서 보기: daily | weekly
+    reportTab: "daily", // 보고서 보기: daily | weekly | collect
+    reportDate: null, // 취합 보기 선택 날짜
+    reportCalRef: new Date(), // 취합 캘린더 기준 월
   },
 };
 
@@ -482,9 +484,11 @@ function personTaskRow(t) {
           : ""
       }
       ${
-        t.status !== "done" && t.progress && parseInt(t.progress) > 0
-          ? `<span class="pt-pct">${parseInt(t.progress)}%</span>`
-          : ""
+        t.status === "done"
+          ? `<span class="pt-pct">100%</span>`
+          : `<input type="number" class="pt-prog" data-id="${t.id}" value="${
+              parseInt(t.progress) || 0
+            }" min="0" max="100" step="5" title="진행률 %">`
       }
       <span class="pt-lead"></span>
       <span class="pt-status status-${t.status}">${meta.label}</span>
@@ -510,9 +514,15 @@ function taskCard(t) {
       </div>
       ${t.detail ? `<p class="card-desc">${UI.nl2br(t.detail)}</p>` : ""}
       ${
-        t.status === "done" || (t.progress && parseInt(t.progress) > 0)
-          ? progressBar(t.status === "done" ? 100 : t.progress)
-          : ""
+        t.status === "done"
+          ? progressBar(100)
+          : `<div class="prog-edit">
+               <span class="prog-edit-label">진행률</span>
+               <input type="range" min="0" max="100" step="5" value="${
+                 parseInt(t.progress) || 0
+               }" class="prog-range" data-id="${t.id}">
+               <span class="prog-edit-num">${parseInt(t.progress) || 0}%</span>
+             </div>`
       }
       <div class="card-meta">
         ${
@@ -1640,7 +1650,19 @@ function renderReports() {
     <div class="view-toggle">
       <button class="vt ${tab === "daily" ? "active" : ""}" data-act="report-tab" data-tab="daily">📈 일일 보고서</button>
       <button class="vt ${tab === "weekly" ? "active" : ""}" data-act="report-tab" data-tab="weekly">🗓️ 주간 보고서</button>
+      <button class="vt ${tab === "collect" ? "active" : ""}" data-act="report-tab" data-tab="collect">📅 날짜별 취합</button>
     </div>`;
+
+  // 날짜별 취합 보기
+  if (tab === "collect") {
+    return `
+      <section class="view">
+        <div class="view-head"><h2>날짜별 취합 보고</h2></div>
+        <p class="muted">날짜를 클릭하면 그날 팀원들이 작성한 일일보고를 모아 보고, 한 장으로 취합해 출력(PDF)할 수 있어요.</p>
+        ${toggle}
+        ${renderReportsCollect()}
+      </section>`;
+  }
 
   const cards = items.length
     ? items.map((r) => (tab === "weekly" ? weeklyCard(r) : dailyCard(r))).join("")
@@ -1714,22 +1736,125 @@ function weeklyCard(r) {
     </div>`;
 }
 
+/* ===== 날짜별 취합 보기 ===== */
+function renderReportsCollect() {
+  const date = App.state.reportDate || UI.todayInput();
+  const dayReports = Store.list("reports")
+    .filter((r) => r.kind !== "weekly" && r.date === date)
+    .sort((a, b) => UI.memberName(a.member_id).localeCompare(UI.memberName(b.member_id), "ko"));
+
+  const cards = dayReports.length
+    ? dayReports.map((r) => dailyCard(r)).join("")
+    : `<div class="empty">${UI.fmtDate(date)}에 작성된 일일보고가 없습니다.</div>`;
+
+  return `
+    ${reportCollectCalendar()}
+    <div class="collect-head">
+      <h3>📅 ${UI.fmtDate(date)} · 일일보고 ${dayReports.length}건</h3>
+      <button class="btn primary" data-act="report-combine" data-date="${date}" ${
+    dayReports.length ? "" : "disabled"
+  }>📄 취합 제출 양식 (${dayReports.length}명)</button>
+    </div>
+    <div class="list">${cards}</div>`;
+}
+
+function reportCollectCalendar() {
+  const ref = App.state.reportCalRef;
+  const year = ref.getFullYear();
+  const month = ref.getMonth();
+  const selected = App.state.reportDate || UI.todayInput();
+  const today = UI.todayInput();
+
+  // 날짜별 일일보고 개수
+  const countByDate = {};
+  Store.list("reports")
+    .filter((r) => r.kind !== "weekly" && r.date)
+    .forEach((r) => (countByDate[r.date] = (countByDate[r.date] || 0) + 1));
+
+  const first = new Date(year, month, 1);
+  const startDay = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const wd = ["일", "월", "화", "수", "목", "금", "토"]
+    .map((d, i) => `<div class="cal-wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${d}</div>`)
+    .join("");
+
+  let cells = "";
+  for (let i = 0; i < startDay; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const n = countByDate[ds] || 0;
+    cells += `
+      <div class="cal-cell collect-cell ${ds === selected ? "selected" : ""} ${
+      ds === today ? "today" : ""
+    }" data-act="report-date" data-date="${ds}">
+        <div class="cal-daynum">${d}</div>
+        ${n ? `<div class="collect-badge">📄 ${n}</div>` : ""}
+      </div>`;
+  }
+
+  return `
+    <div class="cal-toolbar">
+      <button class="icon-btn" data-act="report-cal-prev">‹</button>
+      <strong>${year}년 ${month + 1}월</strong>
+      <button class="icon-btn" data-act="report-cal-next">›</button>
+      <button class="btn ghost sm" data-act="report-cal-today">오늘</button>
+    </div>
+    <div class="cal-grid collect-grid">${wd}${cells}</div>`;
+}
+
+function combinedSheetHTML(date, reps) {
+  const blocks = reps
+    .map(
+      (r) => `
+      <div class="combined-member">
+        <h2 class="cm-name">${UI.esc(UI.memberName(r.member_id))}</h2>
+        <section><h3>오늘 한 일</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
+        <section><h3>내일 할 일</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
+        ${r.note ? `<section><h3>특이사항</h3><div>${UI.nl2br(r.note)}</div></section>` : ""}
+      </div>`
+    )
+    .join("");
+  return `
+    <div class="report-sheet">
+      <h1>일일 업무 보고서 (취합)</h1>
+      <div class="rs-meta">
+        <div><span>일자</span><b>${UI.fmtDate(date)}</b></div>
+        <div><span>인원</span><b>${reps.length}명</b></div>
+      </div>
+      ${blocks}
+    </div>`;
+}
+
+function openCombinedReport(date) {
+  const reps = Store.list("reports")
+    .filter((r) => r.kind !== "weekly" && r.date === date)
+    .sort((a, b) => UI.memberName(a.member_id).localeCompare(UI.memberName(b.member_id), "ko"));
+  if (!reps.length) return;
+  const text = reps.map((r) => reportToText(r)).join("\n\n────────────\n\n");
+  openSheetModal(combinedSheetHTML(date, reps), text);
+}
+
 function buildAutoReportDraft() {
   const today = UI.todayInput();
   const me = curUser();
-  const doneTasks = Store.list("tasks").filter(
+  const mineTasks = Store.list("tasks").filter((t) => !me || t.assignee_id === me);
+  // 오늘 완료한 일
+  const doneToday = mineTasks.filter(
     (t) =>
       t.status === "done" &&
-      (!me || t.assignee_id === me) &&
       (t.updated_at || t.created_at || "").slice(0, 10) === today
   );
-  const todoTasks = Store.list("tasks").filter(
-    (t) => t.status !== "done" && (!me || t.assignee_id === me)
-  );
+  // 진행 중인 일 (진행률 포함)
+  const doingTasks = mineTasks.filter((t) => t.status === "doing");
+  const todoTasks = mineTasks.filter((t) => t.status === "todo");
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
   const doneLines = [];
-  doneTasks.forEach((t) => doneLines.push("- " + t.title));
+  doneToday.forEach((t) => doneLines.push(`- ${t.title} (100%)`));
+  doingTasks.forEach((t) =>
+    doneLines.push(`- ${t.title} (${parseInt(t.progress) || 0}%)`)
+  );
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
   const todoLines = todoTasks.slice(0, 10).map((t) => "- " + t.title);
@@ -1907,6 +2032,11 @@ function reportSheetHTML(r) {
 /* 제출용 보고서 미리보기 (복사/인쇄·PDF) */
 function openReportPreview(r) {
   if (!r) return;
+  openSheetModal(reportSheetHTML(r), reportToText(r));
+}
+
+/* 보고서 양식 미리보기 공통 모달 (복사/인쇄·PDF) */
+function openSheetModal(sheetHTML, copyText) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
@@ -1915,7 +2045,7 @@ function openReportPreview(r) {
         <h3>제출용 보고서</h3>
         <button class="icon-btn" data-close>✕</button>
       </div>
-      <div class="modal-body report-preview-body">${reportSheetHTML(r)}</div>
+      <div class="modal-body report-preview-body">${sheetHTML}</div>
       <div class="modal-foot">
         <button class="btn ghost" data-copy>📋 복사</button>
         <button class="btn primary" data-print>🖨️ 인쇄 · PDF 저장</button>
@@ -1929,13 +2059,13 @@ function openReportPreview(r) {
   overlay.querySelector("[data-close]").onclick = close;
   overlay.querySelector("[data-copy]").onclick = async () => {
     try {
-      await navigator.clipboard.writeText(reportToText(r));
-      UI.toast("보고서가 복사되었습니다");
+      await navigator.clipboard.writeText(copyText);
+      UI.toast("복사되었습니다");
     } catch (e) {
       UI.toast("복사 권한이 없습니다", "warn");
     }
   };
-  overlay.querySelector("[data-print]").onclick = () => printReport(reportSheetHTML(r));
+  overlay.querySelector("[data-print]").onclick = () => printReport(sheetHTML);
 }
 
 function printReport(html) {
@@ -2207,6 +2337,33 @@ async function handleAction(act, el) {
       App.state.reportTab = el.getAttribute("data-tab");
       render();
       return;
+    case "report-date":
+      App.state.reportDate = el.getAttribute("data-date");
+      render();
+      return;
+    case "report-cal-prev":
+      App.state.reportCalRef = new Date(
+        App.state.reportCalRef.getFullYear(),
+        App.state.reportCalRef.getMonth() - 1,
+        1
+      );
+      render();
+      return;
+    case "report-cal-next":
+      App.state.reportCalRef = new Date(
+        App.state.reportCalRef.getFullYear(),
+        App.state.reportCalRef.getMonth() + 1,
+        1
+      );
+      render();
+      return;
+    case "report-cal-today":
+      App.state.reportCalRef = new Date();
+      App.state.reportDate = UI.todayInput();
+      render();
+      return;
+    case "report-combine":
+      return openCombinedReport(el.getAttribute("data-date"));
     case "report-add": return reportForm();
     case "report-auto": return reportForm(null, buildAutoReportDraft());
     case "wreport-add": return weeklyReportForm();
@@ -2281,6 +2438,20 @@ function bindGlobalEvents() {
     if (e.target.id === "kptMine") {
       App.state.kptMineOnly = e.target.checked;
       render();
+    }
+    // 진행률 인라인 수정 (대시보드)
+    if (e.target.classList.contains("prog-range") || e.target.classList.contains("pt-prog")) {
+      let v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+      Store.update("tasks", e.target.getAttribute("data-id"), { progress: String(v) });
+      UI.toast("진행률 " + v + "% 저장");
+    }
+  });
+
+  // 슬라이더 드래그 중 % 숫자 실시간 갱신 (저장은 change에서)
+  document.body.addEventListener("input", (e) => {
+    if (e.target.classList.contains("prog-range")) {
+      const num = e.target.parentElement.querySelector(".prog-edit-num");
+      if (num) num.textContent = (parseInt(e.target.value) || 0) + "%";
     }
   });
 
