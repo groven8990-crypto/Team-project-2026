@@ -1228,7 +1228,9 @@ function participantChips(ids) {
 function highlightItem(e) {
   return `
     <div class="hl-item">
-      <span class="hl-date">${UI.fmtDate(e.date)}</span>
+      <span class="hl-date">${UI.fmtDate(e.date)}${
+    e.end_date && e.end_date !== e.date ? " ~ " + UI.fmtDate(e.end_date) : ""
+  }</span>
       <span class="hl-title">${UI.esc(e.title)}</span>
       ${memberDots(e.participants)}
       <span class="hl-actions">
@@ -1261,7 +1263,11 @@ function calendarGrid(year, month, events) {
       2,
       "0"
     )}`;
-    const dayEvents = events.filter((e) => e.date === ds);
+    const dayEvents = events.filter((e) => {
+      const start = e.date;
+      const end = e.end_date || e.date;
+      return start && ds >= start && ds <= end;
+    });
     const evHtml = dayEvents
       .slice(0, 4)
       .map(
@@ -1310,7 +1316,8 @@ async function eventForm(existing, presetDate) {
     values,
     fields: [
       { name: "title", label: "일정 제목", type: "text", required: true, full: true },
-      { name: "date", label: "날짜", type: "date", required: true },
+      { name: "date", label: "시작 날짜", type: "date", required: true },
+      { name: "end_date", label: "종료 날짜 (여러 날이면)", type: "date" },
       {
         name: "scope",
         label: "구분",

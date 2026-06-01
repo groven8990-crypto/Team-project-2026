@@ -31,6 +31,7 @@ create table if not exists events (
   id text primary key,
   title text not null,
   date text,
+  end_date text,                     -- 종료 날짜(여러 날 일정)
   scope text default 'day',          -- day | week | month
   member_id text,
   participants jsonb default '[]'::jsonb,  -- 참여자 멤버 id 배열
