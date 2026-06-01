@@ -1212,7 +1212,7 @@ function memberDots(ids) {
       const color = m ? m.color || "#64748b" : "#cbd5e1";
       const name = m ? m.name : "?";
       const initial = (name.trim()[0] || "?");
-      return `<span class="mavatar" style="background:${UI.esc(color)}" title="${UI.esc(
+      return `<span class="mavatar" style="--c:${UI.esc(color)}" title="${UI.esc(
         name
       )}">${UI.esc(initial)}</span>`;
     })

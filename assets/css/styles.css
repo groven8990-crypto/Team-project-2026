@@ -547,10 +547,12 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 /* 멤버 성(첫 글자) 색 동그라미 (참여자) */
 .mdots { display: inline-flex; align-items: center; gap: 3px; }
 .mavatar {
-  width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 10px;
+  width: 20px; height: 20px; border-radius: 50%; font-size: 10px;
   font-weight: 800; display: inline-flex; align-items: center; justify-content: center;
-  border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(15,23,42,.08); flex-shrink: 0;
-  letter-spacing: -0.5px;
+  border: 1.5px solid #fff; flex-shrink: 0; letter-spacing: -0.5px;
+  background: color-mix(in srgb, var(--c, #64748b) 22%, #fff);
+  color: color-mix(in srgb, var(--c, #64748b) 75%, #1f2937);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c, #64748b) 22%, #e2e8f0);
 }
 .cal-ev-wrap { margin-bottom: 3px; }
 .cal-ev-dots { display: flex; gap: 2px; padding: 2px 0 0 3px; flex-wrap: wrap; }
