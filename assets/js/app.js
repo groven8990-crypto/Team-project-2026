@@ -27,6 +27,40 @@ const GOAL_STATUS = [
 ];
 const GRADES = ["미평가", "S", "A", "B", "C"];
 
+/* 보고서 종류별 라벨 (주간/월간은 '계획' 중심) */
+const REPORT_META = {
+  daily: {
+    title: "일일 업무 보고서",
+    periodLabel: "작성일",
+    s1: "오늘 한 일",
+    s2: "내일 할 일",
+    s3: "특이사항 / 공유사항",
+    progressLabel: "진행률",
+  },
+  weekly: {
+    title: "주간 업무 계획 보고서",
+    periodLabel: "기간",
+    s1: "이번 주 계획 / 목표",
+    s2: "주요 추진 업무 · 일정",
+    s3: "비고 / 특이사항",
+    progressLabel: "주간 목표 진행률",
+  },
+  monthly: {
+    title: "월간 업무 계획 보고서",
+    periodLabel: "기간",
+    s1: "이달 계획 / 목표",
+    s2: "주요 추진 업무 · 일정",
+    s3: "비고 / 특이사항",
+    progressLabel: "월간 목표 진행률",
+  },
+};
+function reportMeta(r) {
+  return REPORT_META[r && r.kind] || REPORT_META.daily;
+}
+function isDailyReport(r) {
+  return !r.kind || r.kind === "daily";
+}
+
 /* 페이지별 사용법 (하단 안내) */
 const HELP = {
   home: {
@@ -1830,13 +1864,18 @@ function renderReports() {
     .slice()
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const items = all.filter((r) =>
-    tab === "weekly" ? r.kind === "weekly" : r.kind !== "weekly"
+    tab === "weekly"
+      ? r.kind === "weekly"
+      : tab === "monthly"
+      ? r.kind === "monthly"
+      : isDailyReport(r)
   );
 
   const toggle = `
     <div class="view-toggle">
-      <button class="vt ${tab === "daily" ? "active" : ""}" data-act="report-tab" data-tab="daily">📈 일일 보고서</button>
-      <button class="vt ${tab === "weekly" ? "active" : ""}" data-act="report-tab" data-tab="weekly">🗓️ 주간 보고서</button>
+      <button class="vt ${tab === "daily" ? "active" : ""}" data-act="report-tab" data-tab="daily">📈 일일</button>
+      <button class="vt ${tab === "weekly" ? "active" : ""}" data-act="report-tab" data-tab="weekly">🗓️ 주간 계획</button>
+      <button class="vt ${tab === "monthly" ? "active" : ""}" data-act="report-tab" data-tab="monthly">📆 월간 계획</button>
       <button class="vt ${tab === "collect" ? "active" : ""}" data-act="report-tab" data-tab="collect">📅 날짜별 취합</button>
     </div>`;
 
@@ -1851,22 +1890,34 @@ function renderReports() {
       </section>`;
   }
 
+  const cardFn = tab === "daily" ? dailyCard : planCard;
   const cards = items.length
-    ? items.map((r) => (tab === "weekly" ? weeklyCard(r) : dailyCard(r))).join("")
-    : `<div class="empty">작성된 ${tab === "weekly" ? "주간" : "일일"} 보고서가 없습니다.</div>`;
+    ? items.map((r) => cardFn(r)).join("")
+    : `<div class="empty">작성된 보고서가 없습니다.</div>`;
 
-  const head =
-    tab === "weekly"
-      ? `
+  let head;
+  if (tab === "weekly") {
+    head = `
       <div class="view-head">
-        <h2>주간 보고서</h2>
+        <h2>주간 계획 보고서</h2>
         <div class="head-btns">
-          <button class="btn ghost" data-act="wreport-auto">⚡ 이번 주 일일보고 모아서 자동생성</button>
-          <button class="btn primary" data-act="wreport-add">+ 주간 보고서 작성</button>
+          <button class="btn ghost" data-act="wreport-auto">⚡ 이번 주 일정·업무로 자동생성</button>
+          <button class="btn primary" data-act="wreport-add">+ 주간 계획 작성</button>
         </div>
       </div>
-      <p class="muted">한 주의 실적과 다음 주 계획을 정리해 제출하세요. '자동생성'은 이번 주(월~금) 작성한 일일보고를 모아 초안을 만듭니다.</p>`
-      : `
+      <p class="muted">이번 주에 할 일을 미리 계획해 작성/공유하세요. '자동생성'은 이번 주 일정과 미완료 업무를 모아 초안을 만듭니다.</p>`;
+  } else if (tab === "monthly") {
+    head = `
+      <div class="view-head">
+        <h2>월간 계획 보고서</h2>
+        <div class="head-btns">
+          <button class="btn ghost" data-act="mreport-auto">⚡ 이달 일정·업무로 자동생성</button>
+          <button class="btn primary" data-act="mreport-add">+ 월간 계획 작성</button>
+        </div>
+      </div>
+      <p class="muted">이달에 할 일을 미리 계획해 작성/공유하세요. '자동생성'은 이달 일정과 목표·미완료 업무를 모아 초안을 만듭니다.</p>`;
+  } else {
+    head = `
       <div class="view-head">
         <h2>일일 보고서</h2>
         <div class="head-btns">
@@ -1874,7 +1925,8 @@ function renderReports() {
           <button class="btn primary" data-act="report-add">+ 보고서 작성</button>
         </div>
       </div>
-      <p class="muted">하루 동안 한 일을 보고서 형태로 기록하고 공유하세요. '자동생성'은 오늘 완료한 할일과 작성한 기록을 모아 초안을 만듭니다.</p>`;
+      <p class="muted">하루 동안 한 일을 보고서 형태로 기록하고 공유하세요. '자동생성'은 오늘 완료/진행한 업무를 모아 초안을 만듭니다.</p>`;
+  }
 
   return `
     <section class="view">
@@ -1903,21 +1955,26 @@ function dailyCard(r) {
     </div>`;
 }
 
-function weeklyCard(r) {
+function planCard(r) {
+  const meta = reportMeta(r);
+  const editAct = r.kind === "monthly" ? "mreport-edit" : "wreport-edit";
+  const icon = r.kind === "monthly" ? "📆" : "🗓️";
   return `
     <div class="card report-card weekly">
       <div class="card-top">
-        <strong>🗓️ ${UI.esc(r.period || UI.fmtDate(r.date))} 주간 보고</strong>
+        <strong>${icon} ${UI.esc(r.period || UI.fmtDate(r.date))} ${
+    r.kind === "monthly" ? "월간 계획" : "주간 계획"
+  }</strong>
         ${UI.memberChip(r.member_id)}
       </div>
-      ${r.progress ? progressBar(r.progress, "주간 진행률") : ""}
-      ${r.done ? `<div class="report-row"><b>이번 주 한 일</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
-      ${r.todo ? `<div class="report-row"><b>다음 주 계획</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
-      ${r.note ? `<div class="report-row"><b>이슈 / 건의</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
+      ${r.progress ? progressBar(r.progress, meta.progressLabel) : ""}
+      ${r.done ? `<div class="report-row"><b>${meta.s1}</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
+      ${r.todo ? `<div class="report-row"><b>${meta.s2}</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
+      ${r.note ? `<div class="report-row"><b>${meta.s3}</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
       <div class="card-actions">
         <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
         <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
-        <button class="btn xs ghost" data-act="wreport-edit" data-id="${r.id}">수정</button>
+        <button class="btn xs ghost" data-act="${editAct}" data-id="${r.id}">수정</button>
         <button class="btn xs danger" data-act="report-del" data-id="${r.id}">삭제</button>
       </div>
     </div>`;
@@ -1927,7 +1984,7 @@ function weeklyCard(r) {
 function renderReportsCollect() {
   const date = App.state.reportDate || UI.todayInput();
   const dayReports = Store.list("reports")
-    .filter((r) => r.kind !== "weekly" && r.date === date)
+    .filter((r) => isDailyReport(r) && r.date === date)
     .sort((a, b) => UI.memberName(a.member_id).localeCompare(UI.memberName(b.member_id), "ko"));
 
   const cards = dayReports.length
@@ -1955,7 +2012,7 @@ function reportCollectCalendar() {
   // 날짜별 일일보고 개수
   const countByDate = {};
   Store.list("reports")
-    .filter((r) => r.kind !== "weekly" && r.date)
+    .filter((r) => isDailyReport(r) && r.date)
     .forEach((r) => (countByDate[r.date] = (countByDate[r.date] || 0) + 1));
 
   const first = new Date(year, month, 1);
@@ -2015,7 +2072,7 @@ function combinedSheetHTML(date, reps) {
 
 function openCombinedReport(date) {
   const reps = Store.list("reports")
-    .filter((r) => r.kind !== "weekly" && r.date === date)
+    .filter((r) => isDailyReport(r) && r.date === date)
     .sort((a, b) => UI.memberName(a.member_id).localeCompare(UI.memberName(b.member_id), "ko"));
   if (!reps.length) return;
   const text = reps.map((r) => reportToText(r)).join("\n\n────────────\n\n");
@@ -2062,74 +2119,100 @@ function buildAutoReportDraft() {
   };
 }
 
-/* 이번 주(월~금) 범위 계산 */
+function fmtYMD(x) {
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(
+    x.getDate()
+  ).padStart(2, "0")}`;
+}
+/* 이번 주(월~금) 범위 */
 function currentWeekRange() {
   const d = new Date();
-  const day = d.getDay(); // 0=일
+  const day = d.getDay();
   const diffToMon = day === 0 ? -6 : 1 - day;
   const mon = new Date(d);
   mon.setDate(d.getDate() + diffToMon);
   const fri = new Date(mon);
   fri.setDate(mon.getDate() + 4);
-  const fmt = (x) =>
-    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(
-      x.getDate()
-    ).padStart(2, "0")}`;
-  return { start: fmt(mon), end: fmt(fri) };
+  return { start: fmtYMD(mon), end: fmtYMD(fri) };
+}
+/* 이번 달 범위 */
+function currentMonthRange() {
+  const d = new Date();
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return {
+    start: fmtYMD(first),
+    end: fmtYMD(last),
+    label: `${d.getFullYear()}년 ${d.getMonth() + 1}월`,
+  };
 }
 
-function buildWeeklyDraft() {
+/* 주간/월간 '계획' 보고서 자동 초안: 기간 내 일정 + 미완료 업무 */
+function buildPlanDraft(kind) {
   const me = curUser();
-  const { start, end } = currentWeekRange();
-  // 이번 주에 작성한 (본인) 일일보고 모으기
-  const dailies = Store.list("reports")
-    .filter(
-      (r) =>
-        r.kind !== "weekly" &&
-        (!me || r.member_id === me) &&
-        r.date >= start &&
-        r.date <= end
-    )
-    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const range = kind === "monthly" ? currentMonthRange() : currentWeekRange();
+  const period =
+    kind === "monthly"
+      ? range.label
+      : `${UI.fmtDate(range.start)} ~ ${UI.fmtDate(range.end)}`;
 
-  const doneLines = [];
-  dailies.forEach((r) => {
-    if (!r.done) return;
-    const md = UI.fmtDate(r.date).slice(5); // MM.DD
-    r.done
-      .split("\n")
-      .filter((x) => x.trim())
-      .forEach((line) => doneLines.push(`[${md}] ${line.replace(/^[-\s]+/, "")}`));
-  });
-
-  // 다음 주 계획 = 미완료 할일
-  const todoTasks = Store.list("tasks").filter(
+  // 계획/목표 = 내 미완료 업무(할일/진행중)
+  const mineOpen = Store.list("tasks").filter(
     (t) => t.status !== "done" && (!me || t.assignee_id === me)
   );
-  const todoLines = todoTasks.slice(0, 12).map((t) => "- " + t.title);
+  const planLines = mineOpen.map((t) => {
+    const p = parseInt(t.progress) || 0;
+    return `- ${t.title}${p > 0 ? ` (${p}%)` : ""}`;
+  });
+
+  // 주요 일정 = 기간 내 캘린더 일정
+  const events = Store.list("events")
+    .filter((e) => {
+      const s = e.date || "";
+      const en = e.end_date || e.date || "";
+      return s && s <= range.end && en >= range.start; // 범위 겹침
+    })
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const eventLines = events.map(
+    (e) => `- [${UI.fmtDate(e.date).slice(5)}] ${e.title}`
+  );
+
+  // 월간이면 올해 진행 중인 목표도 참고로
+  if (kind === "monthly") {
+    Store.list("goals")
+      .filter((g) => g.status === "doing")
+      .slice(0, 8)
+      .forEach((g) => planLines.push(`- (목표) ${g.title}`));
+  }
 
   return {
-    kind: "weekly",
+    kind: kind,
     member_id: me,
-    date: start,
-    period: `${UI.fmtDate(start)} ~ ${UI.fmtDate(end)}`,
-    done: doneLines.join("\n"),
-    todo: todoLines.join("\n"),
+    date: range.start,
+    period: period,
+    done: planLines.join("\n"),
+    todo: eventLines.join("\n"),
     note: "",
   };
 }
 
-async function weeklyReportForm(existing, preset) {
-  const range = currentWeekRange();
-  const values = existing ||
+async function planReportForm(kind, existing, preset) {
+  const meta = REPORT_META[kind];
+  const range = kind === "monthly" ? currentMonthRange() : currentWeekRange();
+  const defPeriod =
+    kind === "monthly"
+      ? range.label
+      : `${UI.fmtDate(range.start)} ~ ${UI.fmtDate(range.end)}`;
+  const values =
+    existing ||
     preset || {
-      kind: "weekly",
+      kind: kind,
       member_id: curUser(),
       date: range.start,
-      period: `${UI.fmtDate(range.start)} ~ ${UI.fmtDate(range.end)}`,
+      period: defPeriod,
     };
   const res = await UI.formModal({
-    title: existing ? "주간 보고서 수정" : "주간 보고서 작성",
+    title: (existing ? "수정 — " : "작성 — ") + meta.title,
     submitText: existing ? "수정" : "저장",
     values,
     fields: [
@@ -2139,19 +2222,19 @@ async function weeklyReportForm(existing, preset) {
         type: "select",
         options: UI.memberOptions(false),
       },
-      { name: "period", label: "기간", type: "text", placeholder: "예: 2026.05.26 ~ 05.30" },
-      { name: "progress", label: "주간 진행률 (%)", type: "text", placeholder: "예: 80" },
-      { name: "done", label: "이번 주 한 일 (주요 실적)", type: "textarea", rows: 6, full: true },
-      { name: "todo", label: "다음 주 계획", type: "textarea", rows: 5, full: true },
-      { name: "note", label: "이슈 / 건의사항", type: "textarea", rows: 3, full: true },
+      { name: "period", label: "기간", type: "text", placeholder: defPeriod },
+      { name: "progress", label: meta.progressLabel + " (%)", type: "text", placeholder: "예: 0" },
+      { name: "done", label: meta.s1, type: "textarea", rows: 6, full: true },
+      { name: "todo", label: meta.s2, type: "textarea", rows: 5, full: true },
+      { name: "note", label: meta.s3, type: "textarea", rows: 3, full: true },
     ],
   });
   if (!res) return;
-  res.kind = "weekly";
+  res.kind = kind;
   if (!res.date) res.date = range.start;
   if (existing) await Store.update("reports", existing.id, res);
   else await Store.add("reports", res);
-  UI.toast("주간 보고서가 저장되었습니다");
+  UI.toast(meta.title + " 저장됨");
 }
 
 async function reportForm(existing, preset) {
@@ -2181,46 +2264,37 @@ async function reportForm(existing, preset) {
 }
 
 function reportToText(r) {
-  if (r.kind === "weekly") {
-    return (
-      `[주간 업무 보고] ${r.period || UI.fmtDate(r.date)} / ${UI.memberName(r.member_id)}\n\n` +
-      `■ 이번 주 한 일\n${r.done || "-"}\n\n` +
-      `■ 다음 주 계획\n${r.todo || "-"}\n\n` +
-      `■ 이슈 / 건의사항\n${r.note || "-"}`
-    );
-  }
+  const meta = reportMeta(r);
+  const period = isDailyReport(r) ? UI.fmtDate(r.date) : r.period || UI.fmtDate(r.date);
   return (
-    `[일일 업무 보고] ${UI.fmtDate(r.date)} / ${UI.memberName(r.member_id)}\n\n` +
-    `■ 오늘 한 일\n${r.done || "-"}\n\n` +
-    `■ 내일 할 일\n${r.todo || "-"}\n\n` +
-    `■ 특이사항\n${r.note || "-"}`
+    `[${meta.title}] ${period} / ${UI.memberName(r.member_id)}\n\n` +
+    `■ ${meta.s1}\n${r.done || "-"}\n\n` +
+    `■ ${meta.s2}\n${r.todo || "-"}\n\n` +
+    `■ ${meta.s3}\n${r.note || "-"}`
   );
 }
 
 /* 제출용 보고서 양식 HTML */
 function reportSheetHTML(r) {
-  const weekly = r.kind === "weekly";
-  const title = weekly ? "주간 업무 보고서" : "일일 업무 보고서";
-  const periodLabel = weekly ? "기간" : "작성일";
-  const periodVal = weekly ? UI.esc(r.period || UI.fmtDate(r.date)) : UI.fmtDate(r.date);
-  const s1 = weekly ? "이번 주 한 일" : "오늘 한 일";
-  const s2 = weekly ? "다음 주 계획" : "내일 할 일";
-  const s3 = weekly ? "이슈 / 건의사항" : "특이사항 / 공유사항";
+  const meta = reportMeta(r);
+  const periodVal = isDailyReport(r)
+    ? UI.fmtDate(r.date)
+    : UI.esc(r.period || UI.fmtDate(r.date));
   return `
     <div class="report-sheet">
-      <h1>${title}</h1>
+      <h1>${meta.title}</h1>
       <div class="rs-meta">
-        <div><span>${periodLabel}</span><b>${periodVal}</b></div>
+        <div><span>${meta.periodLabel}</span><b>${periodVal}</b></div>
         <div><span>작성자</span><b>${UI.esc(UI.memberName(r.member_id))}</b></div>
         ${
-          weekly && r.progress
-            ? `<div><span>진행률</span><b>${parseInt(r.progress) || 0}%</b></div>`
+          r.progress
+            ? `<div><span>${meta.progressLabel}</span><b>${parseInt(r.progress) || 0}%</b></div>`
             : ""
         }
       </div>
-      <section><h3>${s1}</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
-      <section><h3>${s2}</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
-      <section><h3>${s3}</h3><div>${r.note ? UI.nl2br(r.note) : "-"}</div></section>
+      <section><h3>${meta.s1}</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
+      <section><h3>${meta.s2}</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
+      <section><h3>${meta.s3}</h3><div>${r.note ? UI.nl2br(r.note) : "-"}</div></section>
     </div>`;
 }
 
@@ -2586,9 +2660,12 @@ async function handleAction(act, el) {
       return openCombinedReport(el.getAttribute("data-date"));
     case "report-add": return reportForm();
     case "report-auto": return reportForm(null, buildAutoReportDraft());
-    case "wreport-add": return weeklyReportForm();
-    case "wreport-auto": return weeklyReportForm(null, buildWeeklyDraft());
-    case "wreport-edit": return weeklyReportForm(find("reports"));
+    case "wreport-add": return planReportForm("weekly");
+    case "wreport-auto": return planReportForm("weekly", null, buildPlanDraft("weekly"));
+    case "wreport-edit": return planReportForm("weekly", find("reports"));
+    case "mreport-add": return planReportForm("monthly");
+    case "mreport-auto": return planReportForm("monthly", null, buildPlanDraft("monthly"));
+    case "mreport-edit": return planReportForm("monthly", find("reports"));
     case "report-submit": return openReportPreview(find("reports"));
     case "report-edit": return reportForm(find("reports"));
     case "report-del":
