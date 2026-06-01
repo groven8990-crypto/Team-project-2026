@@ -144,6 +144,12 @@ const UI = (function () {
           html += `<div class="checks" id="${id}">
             ${
               opts.length
+                ? `<input type="text" class="checks-search" placeholder="🔍 이름 검색…">`
+                : ""
+            }
+            <div class="checks-list">
+            ${
+              opts.length
                 ? opts
                     .map(
                       (o) =>
@@ -156,6 +162,7 @@ const UI = (function () {
                     .join("")
                 : `<span class="muted">선택지가 없습니다 (멤버를 먼저 등록하세요)</span>`
             }
+            </div>
           </div>`;
         } else if (f.type === "color") {
           const colors = f.options || [];
@@ -249,6 +256,17 @@ const UI = (function () {
           const picker = sw.closest(".color-picker");
           picker.querySelectorAll(".swatch").forEach((s) => s.classList.remove("active"));
           sw.classList.add("active");
+        }
+      });
+
+      // 참여자 검색 필터
+      form.addEventListener("input", (e) => {
+        if (e.target.classList.contains("checks-search")) {
+          const q = e.target.value.trim().toLowerCase();
+          const list = e.target.parentElement.querySelector(".checks-list");
+          list.querySelectorAll(".check-item").forEach((item) => {
+            item.style.display = item.textContent.toLowerCase().includes(q) ? "" : "none";
+          });
         }
       });
 
