@@ -2429,8 +2429,8 @@ function renderMembers() {
     </section>`;
 }
 
-/* 멤버 순서 이동 */
-async function moveMember(id, dir) {
+/* 멤버 순서 이동 (브라우저에 저장, SQL 불필요) */
+function moveMember(id, dir) {
   const ms = Store.list("members").slice();
   const i = ms.findIndex((m) => m.id === id);
   if (i < 0) return;
@@ -2439,10 +2439,7 @@ async function moveMember(id, dir) {
   const tmp = ms[i];
   ms[i] = ms[j];
   ms[j] = tmp;
-  // 현재 순서대로 sort 값 재부여 (바뀐 것만 저장)
-  for (let k = 0; k < ms.length; k++) {
-    if (Number(ms[k].sort) !== k) await Store.update("members", ms[k].id, { sort: k });
-  }
+  Store.setMemberOrder(ms.map((m) => m.id));
 }
 
 async function memberForm(existing) {

@@ -120,15 +120,30 @@ const Store = (function () {
   }
 
   /* ---------------- 공개 API ---------------- */
+  function getMemberOrder() {
+    try {
+      return JSON.parse(localStorage.getItem("work-share-member-order")) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function setMemberOrder(ids) {
+    localStorage.setItem("work-share-member-order", JSON.stringify(ids || []));
+    notify();
+  }
+
   function list(collection) {
     const arr = cache[collection] || [];
     if (collection === "members") {
-      const key = (m) => (m.sort == null || m.sort === "" ? 9999 : Number(m.sort));
+      const order = getMemberOrder();
+      const idx = (m) => {
+        const i = order.indexOf(m.id);
+        return i < 0 ? 9999 : i;
+      };
       return arr
         .slice()
         .sort(
-          (a, b) =>
-            key(a) - key(b) || (a.created_at || "").localeCompare(b.created_at || "")
+          (a, b) => idx(a) - idx(b) || (a.created_at || "").localeCompare(b.created_at || "")
         );
     }
     return arr;
@@ -307,6 +322,8 @@ const Store = (function () {
     subscribe,
     getCurrentUserId,
     setCurrentUserId,
+    getMemberOrder,
+    setMemberOrder,
     exportJSON,
     importJSON,
     uid,
