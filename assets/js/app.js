@@ -2105,10 +2105,7 @@ function buildAutoReportDraft() {
   // 내일 할 일: 대시보드의 '할 일(todo)' + 아직 안 끝난 진행 중 업무
   const todoLines = [];
   todoTasks.forEach((t) => todoLines.push("- " + t.title));
-  doingTasks.forEach((t) => {
-    const p = parseInt(t.progress) || 0;
-    todoLines.push(`- ${t.title}${p > 0 ? ` (이어서, ${p}%)` : ""}`);
-  });
+  doingTasks.forEach((t) => todoLines.push("- " + t.title));
 
   return {
     member_id: me,
