@@ -327,8 +327,12 @@ function renderHome() {
         .map(
           (e) => `<div class="mini-row">
             <span class="mini-date">${UI.fmtDate(e.date)}</span>
-            <span class="cal-ev scope-${e.scope || "day"} inline">${
-            e.scope === "month" ? "월" : e.scope === "week" ? "주" : "일"
+            <span class="cal-ev ${scopeClass(e)} inline">${
+            eventScopes(e).includes("month")
+              ? "월"
+              : eventScopes(e).includes("week")
+              ? "주"
+              : "일"
           }</span>
             <span class="mini-title">${UI.esc(e.title)}</span>
           </div>`
@@ -1155,12 +1159,12 @@ function renderCalendar() {
   const month = ref.getMonth();
   const events = Store.list("events");
 
-  // 주별/월별 별도 표시용
+  // 주별/월별 별도 표시용 (한 일정이 둘 다 가능)
   const monthly = events
-    .filter((e) => e.scope === "month" && belongsToMonth(e.date, year, month))
+    .filter((e) => eventScopes(e).includes("month") && belongsToMonth(e.date, year, month))
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const weekly = events
-    .filter((e) => e.scope === "week" && belongsToMonth(e.date, year, month))
+    .filter((e) => eventScopes(e).includes("week") && belongsToMonth(e.date, year, month))
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
   const highlight = `
@@ -1246,6 +1250,20 @@ function belongsToMonth(dateStr, y, m) {
   return d.getFullYear() === y && d.getMonth() === m;
 }
 
+/* 일정의 강조 구분 배열 ('week','month'). 옛 데이터(scope 문자열)도 지원 */
+function eventScopes(e) {
+  if (Array.isArray(e.scopes)) return e.scopes;
+  const raw = e.scope || "";
+  return raw
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => x === "week" || x === "month");
+}
+function scopeClass(e) {
+  const s = eventScopes(e);
+  return s.includes("month") ? "scope-month" : s.includes("week") ? "scope-week" : "scope-day";
+}
+
 function calendarGrid(year, month, events) {
   const first = new Date(year, month, 1);
   const startDay = first.getDay();
@@ -1273,7 +1291,7 @@ function calendarGrid(year, month, events) {
       .map(
         (e) =>
           `<div class="cal-ev-wrap">
-             <div class="cal-ev scope-${e.scope || "day"}" data-act="event-edit" data-id="${
+             <div class="cal-ev ${scopeClass(e)}" data-act="event-edit" data-id="${
             e.id
           }" title="${UI.esc(e.title)}">${UI.esc(e.title)}</div>
              ${
@@ -1305,11 +1323,13 @@ function calendarGrid(year, month, events) {
 }
 
 async function eventForm(existing, presetDate) {
-  const values = existing || {
-    member_id: curUser(),
-    scope: "day",
-    date: presetDate || UI.todayInput(),
-  };
+  const values = existing
+    ? { ...existing, scopes: eventScopes(existing) }
+    : {
+        member_id: curUser(),
+        date: presetDate || UI.todayInput(),
+        scopes: [],
+      };
   const res = await UI.formModal({
     title: existing ? "일정 수정" : "일정 추가",
     submitText: existing ? "수정" : "추가",
@@ -1319,13 +1339,13 @@ async function eventForm(existing, presetDate) {
       { name: "date", label: "시작 날짜", type: "date", required: true },
       { name: "end_date", label: "종료 날짜 (여러 날이면)", type: "date" },
       {
-        name: "scope",
-        label: "구분",
-        type: "select",
+        name: "scopes",
+        label: "상단 강조 (둘 다 선택 가능)",
+        type: "checks",
+        full: true,
         options: [
-          { value: "day", label: "일반 일정" },
-          { value: "week", label: "주별 일정 (상단 강조)" },
-          { value: "month", label: "월별 일정 (상단 강조)" },
+          { value: "week", label: "주별 일정" },
+          { value: "month", label: "월별 일정" },
         ],
       },
       {
@@ -1345,6 +1365,10 @@ async function eventForm(existing, presetDate) {
     ],
   });
   if (!res) return;
+  // 다중 강조(scopes 배열) → scope 문자열로 저장 (예: "week,month")
+  const sc = Array.isArray(res.scopes) ? res.scopes : [];
+  res.scope = sc.length ? sc.join(",") : "day";
+  delete res.scopes;
   if (existing) {
     await Store.update("events", existing.id, res);
     UI.toast("일정이 수정되었습니다");

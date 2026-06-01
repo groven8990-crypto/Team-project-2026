@@ -143,8 +143,8 @@ const UI = (function () {
           const opts = f.options || [];
           html += `<div class="checks" id="${id}">
             ${
-              opts.length
-                ? `<input type="text" class="checks-search" placeholder="🔍 이름 검색…">`
+              opts.length > 8
+                ? `<input type="text" class="checks-search" placeholder="🔍 검색…">`
                 : ""
             }
             <div class="checks-list">
