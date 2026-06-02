@@ -252,7 +252,6 @@ a { color: inherit; }
 @media (max-width: 560px) {
   .items-head { display: none; }
   .item-row { grid-template-columns: 1fr 1fr; }
-  .pt-title { max-width: 38%; }
 }
 
 .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -668,4 +667,45 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
   .kpt-grid { grid-template-columns: 1fr; }
   .modal-body { grid-template-columns: 1fr; }
   .cal-cell { min-height: 64px; }
+}
+
+/* ===== 모바일 최적화 ===== */
+@media (max-width: 600px) {
+  body { font-size: 13.5px; }
+  .app-header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .brand h1 { font-size: 16px; }
+  .header-right { flex-wrap: wrap; gap: 6px; }
+  .user-select { min-width: 110px; flex: 1; }
+  .app-nav { top: 0; position: static; padding: 8px 12px; }
+  .app-main { padding: 16px 12px 56px; }
+
+  .view-head { gap: 8px; }
+  .view-head h2 { font-size: 19px; }
+  .view-toggle { flex-wrap: wrap; width: 100%; }
+  .vt { flex: 1; text-align: center; }
+
+  /* 사람별 보기: 제목 줄 + 진행/상태/버튼 줄로 자연스럽게 줄바꿈 */
+  .ptask { flex-wrap: wrap; row-gap: 8px; padding: 11px 2px; }
+  .pt-lead { display: none; }
+  .pt-title { max-width: none; flex: 1 1 60%; white-space: normal; }
+  .pt-progbox { order: 3; }
+  .pt-status { order: 2; }
+  .pt-actions { order: 4; margin-left: auto; }
+  input[type="range"].prog-range.mini { width: 110px; }
+
+  .person-counts { margin-left: 0; width: 100%; }
+
+  /* 보고서 제출 양식 메타 세로로 */
+  .rs-meta { flex-direction: column; }
+  .rs-meta > div + div { border-left: none; border-top: 1px solid var(--line-2); }
+
+  .modal-overlay { padding: 20px 10px; }
+  .modal-head, .modal-body { padding-left: 16px; padding-right: 16px; }
+  .doc-sidebar { position: static; }
+  .home-banner { padding: 16px; }
+  .home-greet { font-size: 16px; }
+  .cal-daynum { font-size: 11px; }
+  .cal-ev { font-size: 10px; padding: 2px 5px; }
+  .stat-num { font-size: 24px; }
+  .nav-item { padding: 8px 11px; font-size: 12.5px; }
 }
