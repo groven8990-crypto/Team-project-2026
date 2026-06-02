@@ -170,6 +170,7 @@ const App = {
     reportTab: "daily", // 보고서 보기: daily | weekly | collect
     minutesSearch: "", // 회의록 검색어
     reportSearch: "", // 보고서 검색어
+    doneExpanded: {}, // 사람별 보기: 완료 목록 펼침 상태 (memberId→bool)
     reportDate: null, // 취합 보기 선택 날짜
     reportCalRef: new Date(), // 취합 캘린더 기준 월
   },
@@ -527,12 +528,16 @@ function renderDashboard() {
     </div>`;
 
   const columns = TASK_STATUS.map((col) => {
-    const items = tasks
+    let items = tasks
       .filter((t) => t.status === col.key)
       .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+    // 완료 칸: 어제 이전 완료는 숨김(오늘 완료만)
+    if (col.key === "done") items = items.filter((t) => !isHiddenDone(t));
     const cards = items.length
       ? items.map((t) => taskCard(t)).join("")
-      : `<div class="empty-mini">항목 없음</div>`;
+      : `<div class="empty-mini">${
+          col.key === "done" ? "오늘 완료한 일 없음" : "항목 없음"
+        }</div>`;
     return `
       <div class="kanban-col" data-status="${col.key}">
         <div class="kanban-head">
@@ -587,7 +592,7 @@ function dashboardPeople(allTasks) {
     const mine = allTasks.filter((t) => t.assignee_id === m.id);
     sections.push(personSection(m.name, m.color, m.id, mine, m.id === me));
   });
-  if (orphan.length) sections.push(personSection("미지정", "#94a3b8", null, orphan, false));
+  if (orphan.length) sections.push(personSection("미지정", "#94a3b8", "orphan", orphan, false));
 
   if (!members.length && !orphan.length)
     return `<div class="empty">멤버를 등록하고 할 일을 추가해보세요.</div>`;
@@ -595,31 +600,62 @@ function dashboardPeople(allTasks) {
   return `<div class="people-list">${sections.join("")}</div>`;
 }
 
+/* 어제 이전에 완료한 일은 대시보드에서 숨김 */
+function isHiddenDone(t) {
+  return t.status === "done" && t.done_at && t.done_at < UI.todayInput();
+}
+
+/* 상태 변경 시 완료 일자(done_at) 함께 설정/해제 */
+function statusPatch(status, existing) {
+  const patch = { status: status };
+  if (status === "done") {
+    patch.done_at = existing && existing.done_at ? existing.done_at : UI.todayInput();
+    patch.progress = "100";
+  } else {
+    patch.done_at = "";
+  }
+  return patch;
+}
+
 function personSection(name, color, memberId, tasks, isMe) {
-  const order = { doing: 0, todo: 1, done: 2 };
-  const sorted = tasks
-    .slice()
+  const today = UI.todayInput();
+  // 진행/할일(미완료) + 오늘 완료만 노출, 이전 완료는 숨김
+  const active = tasks
+    .filter((t) => t.status !== "done")
     .sort(
       (a, b) =>
-        (order[a.status] - order[b.status]) ||
+        ({ doing: 0, todo: 1 }[a.status] - { doing: 0, todo: 1 }[b.status]) ||
         (a.due_date || "9999").localeCompare(b.due_date || "9999")
     );
+  const doneToday = tasks.filter(
+    (t) => t.status === "done" && (!t.done_at || t.done_at === today)
+  );
+
   const doing = tasks.filter((t) => t.status === "doing").length;
   const todo = tasks.filter((t) => t.status === "todo").length;
-  const done = tasks.filter((t) => t.status === "done").length;
 
-  const rows = sorted.length
-    ? sorted.map((t) => personTaskRow(t)).join("")
-    : `<div class="empty-mini">담당 할 일이 없습니다</div>`;
+  const activeRows = active.length
+    ? active.map((t) => personTaskRow(t)).join("")
+    : `<div class="empty-mini">진행 중인 할 일이 없습니다</div>`;
+
+  const open = !!App.state.doneExpanded[memberId];
+  const doneBlock = doneToday.length
+    ? `
+      <button class="done-toggle" data-act="toggle-done" data-member="${memberId}">
+        <span>✓ 오늘 완료한 일 ${doneToday.length}개</span>
+        <span>${open ? "▲ 접기" : "▼ 펼치기"}</span>
+      </button>
+      ${open ? doneToday.map((t) => personTaskRow(t)).join("") : ""}`
+    : "";
 
   return `
     <div class="person-block">
       <div class="person-head">
         <span class="chip" style="--c:${UI.esc(color || "#64748b")}">${UI.esc(name)}</span>
         ${isMe ? `<span class="chip chip-me">나</span>` : ""}
-        <span class="person-counts">진행 ${doing} · 할일 ${todo} · 완료 ${done}</span>
+        <span class="person-counts">진행 ${doing} · 할일 ${todo} · 오늘 완료 ${doneToday.length}</span>
       </div>
-      <div class="person-tasks">${rows}</div>
+      <div class="person-tasks">${activeRows}${doneBlock}</div>
     </div>`;
 }
 
@@ -640,7 +676,7 @@ function personTaskRow(t) {
       <span class="pt-lead"></span>
       ${
         t.status === "done"
-          ? `<span class="pt-progbox done">✅ 100%</span>`
+          ? `<span class="pt-progbox done">✅ ${t.done_at ? UI.fmtDate(t.done_at).slice(5) + " 완료" : "완료"}</span>`
           : `<span class="pt-progbox" title="진행률">
                <input type="range" min="0" max="100" step="5" value="${
                  parseInt(t.progress) || 0
@@ -683,7 +719,9 @@ function taskCard(t) {
       }
       <div class="card-meta">
         ${
-          t.due_date
+          t.status === "done" && t.done_at
+            ? `<span class="done-date">✅ ${UI.fmtDate(t.done_at)} 완료</span>`
+            : t.due_date
             ? `<span class="due ${overdue ? "overdue" : ""}">📅 ${UI.fmtDate(
                 t.due_date
               )}</span>`
@@ -724,6 +762,12 @@ async function taskForm(existing) {
     ],
   });
   if (!res) return;
+  // 완료 상태면 완료일자 설정, 아니면 해제
+  if (res.status === "done") {
+    res.done_at = existing && existing.done_at ? existing.done_at : UI.todayInput();
+  } else {
+    res.done_at = "";
+  }
   if (existing) {
     await Store.update("tasks", existing.id, res);
     UI.toast("수정되었습니다");
@@ -2648,9 +2692,14 @@ async function handleAction(act, el) {
     case "task-edit": return taskForm(find("tasks"));
     case "task-move": {
       const t = find("tasks");
-      if (t) await Store.update("tasks", id, { status: el.getAttribute("data-to") });
+      if (t) await Store.update("tasks", id, statusPatch(el.getAttribute("data-to"), t));
       return;
     }
+    case "toggle-done":
+      App.state.doneExpanded[el.getAttribute("data-member")] =
+        !App.state.doneExpanded[el.getAttribute("data-member")];
+      render();
+      return;
     case "task-del":
       if (await UI.confirmBox("이 할 일을 삭제할까요?")) await Store.remove("tasks", id);
       return;
@@ -2872,16 +2921,16 @@ function bindGlobalEvents() {
     if (e.target.classList.contains("prog-range") || e.target.classList.contains("pt-prog")) {
       const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
       const id = e.target.getAttribute("data-id");
-      const patch = { progress: String(v) };
-      let statusLabel = "";
+      const cur = Store.list("tasks").find((x) => x.id === id);
+      let patch, statusLabel;
       if (v >= 100) {
-        patch.status = "done";
+        patch = statusPatch("done", cur);
         statusLabel = " · 완료";
       } else if (v > 0) {
-        patch.status = "doing";
+        patch = { status: "doing", done_at: "", progress: String(v) };
         statusLabel = " · 진행 중";
       } else {
-        patch.status = "todo";
+        patch = { status: "todo", done_at: "", progress: "0" };
         statusLabel = " · 할 일";
       }
       Store.update("tasks", id, patch);

@@ -23,6 +23,7 @@ create table if not exists tasks (
   assignee_id text,
   status text default 'todo',
   due_date text,
+  done_at text,                      -- 완료한 날짜(YYYY-MM-DD)
   progress text,                     -- 진행률(%)
   created_at timestamptz default now(),
   updated_at timestamptz
