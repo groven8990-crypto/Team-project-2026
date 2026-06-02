@@ -2101,36 +2101,58 @@ function reportCollectCalendar() {
     <div class="cal-grid collect-grid">${wd}${cells}</div>`;
 }
 
-function combinedSheetHTML(date, reps) {
-  const blocks = reps
-    .map(
-      (r) => `
-      <div class="combined-member">
-        <h2 class="cm-name">${UI.esc(UI.memberName(r.member_id))}</h2>
-        <section><h3>오늘 한 일</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
-        <section><h3>내일 할 일</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
-        ${r.note ? `<section><h3>특이사항</h3><div>${UI.nl2br(r.note)}</div></section>` : ""}
-      </div>`
-    )
+function combinedSheetHTML(date) {
+  const members = Store.list("members"); // 등록 순서
+  const reps = Store.list("reports").filter(
+    (r) => isDailyReport(r) && r.date === date
+  );
+  const byMember = {};
+  reps.forEach((r) => (byMember[r.member_id] = r));
+  const written = members.filter((m) => byMember[m.id]).length;
+
+  const blocks = members
+    .map((m) => {
+      const r = byMember[m.id];
+      const color = m.color || "#64748b";
+      const body = r
+        ? `
+        <div class="cmb-row"><b>오늘 한 일</b><div>${r.done ? UI.nl2br(r.done) : "-"}</div></div>
+        <div class="cmb-row"><b>내일 할 일</b><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></div>
+        ${r.note ? `<div class="cmb-row"><b>특이사항</b><div>${UI.nl2br(r.note)}</div></div>` : ""}`
+        : `<div class="cmb-empty">미작성</div>`;
+      return `
+        <div class="cmb-card ${r ? "" : "is-empty"}" style="--c:${UI.esc(color)}">
+          <div class="cmb-head">${UI.esc(m.name)}</div>
+          <div class="cmb-body">${body}</div>
+        </div>`;
+    })
     .join("");
+
   return `
-    <div class="report-sheet">
-      <h1>일일 업무 보고서 (취합)</h1>
+    <div class="report-sheet combined">
+      <h1>일일 업무 보고서</h1>
       <div class="rs-meta">
         <div><span>일자</span><b>${UI.fmtDate(date)}</b></div>
-        <div><span>인원</span><b>${reps.length}명</b></div>
+        <div><span>작성</span><b>${written} / ${members.length}명</b></div>
       </div>
-      ${blocks}
+      <div class="combined-grid">${blocks}</div>
     </div>`;
 }
 
 function openCombinedReport(date) {
-  const reps = Store.list("reports")
-    .filter((r) => isDailyReport(r) && r.date === date)
-    .sort((a, b) => memberOrder(a.member_id) - memberOrder(b.member_id));
+  const members = Store.list("members");
+  const reps = Store.list("reports").filter((r) => isDailyReport(r) && r.date === date);
   if (!reps.length) return;
-  const text = reps.map((r) => reportToText(r)).join("\n\n────────────\n\n");
-  openSheetModal(combinedSheetHTML(date, reps), text);
+  const byMember = {};
+  reps.forEach((r) => (byMember[r.member_id] = r));
+  const text = members
+    .map((m) =>
+      byMember[m.id]
+        ? reportToText(byMember[m.id])
+        : `[${UI.memberName(m.id)}] 미작성`
+    )
+    .join("\n\n────────────\n\n");
+  openSheetModal(combinedSheetHTML(date), text);
 }
 
 function buildAutoReportDraft() {
@@ -2210,6 +2232,18 @@ function currentMonthRange() {
   };
 }
 
+/* 내 전체 업무 평균 진행률(%) — 완료=100, 진행률 없으면 0 */
+function myOverallProgress(memberId) {
+  const me = memberId || curUser();
+  const mine = Store.list("tasks").filter((t) => !me || t.assignee_id === me);
+  if (!mine.length) return 0;
+  const sum = mine.reduce(
+    (s, t) => s + (t.status === "done" ? 100 : parseInt(t.progress) || 0),
+    0
+  );
+  return Math.round(sum / mine.length);
+}
+
 /* 주간/월간 '계획' 보고서 자동 초안: 기간 내 일정 + 미완료 업무 */
 function buildPlanDraft(kind) {
   const me = curUser();
@@ -2253,6 +2287,7 @@ function buildPlanDraft(kind) {
     member_id: me,
     date: range.start,
     period: period,
+    progress: String(myOverallProgress(me)),
     done: planLines.join("\n"),
     todo: eventLines.join("\n"),
     note: "",
@@ -2273,6 +2308,7 @@ async function planReportForm(kind, existing, preset) {
       member_id: curUser(),
       date: range.start,
       period: defPeriod,
+      progress: String(myOverallProgress(curUser())), // 전체 진행률 자동 입력
     };
   const res = await UI.formModal({
     title: (existing ? "수정 — " : "작성 — ") + meta.title,
@@ -2286,7 +2322,7 @@ async function planReportForm(kind, existing, preset) {
         options: UI.memberOptions(false),
       },
       { name: "period", label: "기간", type: "text", placeholder: defPeriod },
-      { name: "progress", label: meta.progressLabel + " (%)", type: "text", placeholder: "예: 0" },
+      { name: "progress", label: meta.progressLabel + " (% · 전체 진행률 자동)", type: "text", placeholder: "예: 0" },
       { name: "done", label: meta.s1, type: "textarea", rows: 6, full: true },
       { name: "todo", label: meta.s2, type: "textarea", rows: 5, full: true },
       { name: "note", label: meta.s3, type: "textarea", rows: 3, full: true },
