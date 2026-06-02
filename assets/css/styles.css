@@ -453,6 +453,14 @@ a { color: inherit; }
   .doc-main { padding: 18px; }
 }
 
+/* 클릭 가능한 제목 + 할 일 상세 */
+.clickable { cursor: pointer; }
+.pt-title.clickable:hover, .card-top strong.clickable:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+.detail-body-wrap { display: block !important; }
+.detail-title { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 10px; }
+.detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; }
+.detail-content { margin-top: 12px; font-size: 14px; line-height: 1.75; color: var(--ink-2); white-space: normal; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+
 /* ===== 모달 ===== */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(11, 21, 36, 0.5);

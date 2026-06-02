@@ -669,7 +669,7 @@ function personTaskRow(t) {
   return `
     <div class="ptask ${t.status === "done" ? "is-done" : ""}">
       <span class="pt-dot status-${t.status}"></span>
-      <span class="pt-title">${UI.esc(t.title)}</span>
+      <span class="pt-title clickable" data-act="task-detail" data-id="${t.id}">${UI.esc(t.title)}</span>
       ${
         t.due_date
           ? `<span class="pt-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date)}</span>`
@@ -704,7 +704,7 @@ function taskCard(t) {
   return `
     <div class="card task-card ${t.status === "done" ? "is-done" : ""}">
       <div class="card-top">
-        <strong>${UI.esc(t.title)}</strong>
+        <strong class="clickable" data-act="task-detail" data-id="${t.id}">${UI.esc(t.title)}</strong>
         ${UI.memberChip(t.assignee_id)}
       </div>
       ${t.detail ? `<p class="card-desc">${UI.nl2br(t.detail)}</p>` : ""}
@@ -777,6 +777,50 @@ async function taskForm(existing) {
     await Store.add("tasks", res);
     UI.toast("추가되었습니다");
   }
+}
+
+/* 할 일 상세 보기 (읽기 전용) */
+function openTaskDetail(t) {
+  if (!t) return;
+  const meta = TASK_STATUS.find((s) => s.key === t.status) || TASK_STATUS[0];
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-head"><h3>할 일 상세</h3><button class="icon-btn" data-close>✕</button></div>
+      <div class="modal-body detail-body-wrap">
+        <div class="detail-title">${UI.esc(t.title)}</div>
+        <div class="detail-meta">
+          ${UI.memberChip(t.assignee_id)}
+          <span class="pt-status status-${t.status}">${meta.label}</span>
+          ${t.due_date ? `<span class="muted">📅 마감 ${UI.fmtDate(t.due_date)}</span>` : ""}
+          ${
+            t.status === "done" && t.done_at
+              ? `<span class="done-date">✅ ${UI.fmtDate(t.done_at)} 완료</span>`
+              : ""
+          }
+        </div>
+        ${progressBar(t.status === "done" ? 100 : parseInt(t.progress) || 0)}
+        <div class="detail-content">${
+          t.detail ? UI.nl2br(t.detail) : '<span class="muted">상세 내용이 없습니다.</span>'
+        }</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn ghost" data-edit>✎ 수정</button>
+        <button class="btn primary" data-close2>닫기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) close();
+  });
+  overlay.querySelector("[data-close]").onclick = close;
+  overlay.querySelector("[data-close2]").onclick = close;
+  overlay.querySelector("[data-edit]").onclick = () => {
+    close();
+    taskForm(t);
+  };
 }
 
 /* ============ 업무 목표 및 평가 ============ */
@@ -2973,6 +3017,7 @@ async function handleAction(act, el) {
       render();
       return;
     case "task-add": return taskForm();
+    case "task-detail": return openTaskDetail(find("tasks"));
     case "task-edit": return taskForm(find("tasks"));
     case "task-move": {
       const t = find("tasks");
