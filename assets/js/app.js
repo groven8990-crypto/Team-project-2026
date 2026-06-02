@@ -2122,7 +2122,7 @@ function combinedSheetHTML(date) {
         : `<div class="cmb-empty">미작성</div>`;
       return `
         <div class="cmb-card ${r ? "" : "is-empty"}" style="--c:${UI.esc(color)}">
-          <div class="cmb-head"><span class="cmb-dot"></span>${UI.esc(m.name)}</div>
+          <div class="cmb-head"><span class="cmb-name">${UI.esc(m.name)}</span></div>
           <div class="cmb-body">${body}</div>
         </div>`;
     })
