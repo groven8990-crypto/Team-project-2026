@@ -171,6 +171,8 @@ const App = {
     minutesSearch: "", // 회의록 검색어
     reportSearch: "", // 보고서 검색어
     doneExpanded: {}, // 사람별 보기: 완료 목록 펼침 상태 (memberId→bool)
+    assistantOpen: false, // 업무 비서 열림
+    assistantMsgs: [], // 비서 대화 내역
     reportDate: null, // 취합 보기 선택 날짜
     reportCalRef: new Date(), // 취합 캘린더 기준 월
   },
@@ -2645,7 +2647,273 @@ function render() {
     <main class="app-main">${view}${renderHelp()}</main>
     <footer class="app-footer">업무 공유 · ${
       Store.mode === "cloud" ? "실시간 공유 모드" : "로컬 모드"
-    }</footer>`;
+    }</footer>
+    ${renderAssistant()}`;
+}
+
+/* ============ 업무 비서 (내장 검색 챗봇) ============ */
+function renderAssistant() {
+  const open = App.state.assistantOpen;
+  const fab = `<button class="asst-fab" data-act="asst-toggle" title="업무 비서">${
+    open ? "✕" : "💬"
+  }</button>`;
+  if (!open) return fab;
+  const msgs = App.state.assistantMsgs;
+  const greeting = !msgs.length
+    ? `<div class="asst-msg bot">안녕하세요! 업무 비서예요 🤖<br>무엇이든 검색하거나 물어보세요.
+        <div class="asst-suggest">
+          <button class="asst-chip" data-act="asst-q" data-q="내 할일">내 할일</button>
+          <button class="asst-chip" data-act="asst-q" data-q="오늘 일정">오늘 일정</button>
+          <button class="asst-chip" data-act="asst-q" data-q="이번주 일정">이번 주 일정</button>
+          <button class="asst-chip" data-act="asst-q" data-q="최근 회의">최근 회의</button>
+          <button class="asst-chip" data-act="asst-q" data-q="내 진행률">내 진행률</button>
+        </div></div>`
+    : "";
+  const body = msgs.map((m) => `<div class="asst-msg ${m.role}">${m.html}</div>`).join("");
+  return `${fab}
+    <div class="asst-panel">
+      <div class="asst-head"><span>🤖 업무 비서</span><button class="icon-btn" data-act="asst-toggle">✕</button></div>
+      <div class="asst-body" id="asstBody">${greeting}${body}</div>
+      <div class="asst-input-row">
+        <input id="asstInput" class="asst-input" placeholder="검색하거나 물어보세요…" autocomplete="off">
+        <button class="btn primary sm" data-act="asst-send">전송</button>
+      </div>
+    </div>`;
+}
+
+function assistantAsk(q) {
+  q = (q || "").trim();
+  if (!q) return;
+  App.state.assistantMsgs.push({ role: "user", html: UI.esc(q) });
+  App.state.assistantMsgs.push({ role: "bot", html: answerQuery(q) });
+  render();
+  setTimeout(() => {
+    const b = document.getElementById("asstBody");
+    if (b) b.scrollTop = b.scrollHeight;
+    const i = document.getElementById("asstInput");
+    if (i) i.focus();
+  }, 20);
+}
+
+function asstLink(route, text) {
+  return `<a class="asst-link" href="#${route}">${UI.esc(text)}</a>`;
+}
+function findMemberInText(q) {
+  return Store.list("members").find((m) => {
+    const first = (m.name || "").split(/\s+/)[0];
+    return m.name && (q.includes(m.name) || (first && q.includes(first)));
+  });
+}
+function assistantHelp() {
+  return `이렇게 물어보실 수 있어요:<br>
+    • <b>내 할일</b> / <b>김수영 할일</b><br>
+    • <b>오늘 일정</b> / <b>이번 주 일정</b><br>
+    • <b>최근 회의</b> / <b>회의 OOO</b><br>
+    • <b>내 진행률</b><br>
+    • <b>OOO 검색</b> (전체에서 찾기)`;
+}
+
+function answerQuery(raw) {
+  const q = raw.trim();
+  const ql = q.toLowerCase();
+  const me = curUser();
+  const mem = findMemberInText(q);
+  const has = (...k) => k.some((x) => ql.includes(x));
+
+  if (has("사용법", "도움", "도와", "help", "뭐할", "뭐 할", "안녕")) return assistantHelp();
+
+  if (has("진행률", "진척")) {
+    const mid = mem ? mem.id : me;
+    if (!mid) return "먼저 우측 상단에서 본인 이름을 선택하거나, 'OOO 진행률'처럼 이름을 넣어주세요.";
+    const p = myOverallProgress(mid);
+    return `${mem ? UI.esc(mem.name) : "내"} 평균 진행률은 <b>${p}%</b> 예요. ${asstLink(
+      "dashboard",
+      "대시보드 열기"
+    )}`;
+  }
+  if (has("일정", "캘린더", "스케줄")) {
+    if (has("오늘")) return listEventsAnswer("today");
+    if (has("이번주", "이번 주", "주간", "이주")) return listEventsAnswer("week");
+    return listEventsAnswer("upcoming");
+  }
+  if (has("회의", "미팅")) return listMeetingsAnswer(q);
+  if (has("보고")) return listReportsAnswer(q);
+  if (has("완료", "끝낸", "한 일", "한일")) return listTasksAnswer(mem ? mem.id : me, "done", mem);
+  if (has("할일", "할 일", "todo", "업무", "태스크", "진행"))
+    return listTasksAnswer(mem ? mem.id : me, "open", mem);
+  if (has("목표")) return listGoalsAnswer(q);
+  if (has("문서", "sop", "매뉴얼", "양식")) return listDocsAnswer(q);
+
+  return searchAllAnswer(q);
+}
+
+function listTasksAnswer(memberId, mode, mem) {
+  let tasks = Store.list("tasks");
+  if (memberId) tasks = tasks.filter((t) => t.assignee_id === memberId);
+  if (mode === "done") {
+    tasks = tasks.filter((t) => t.status === "done" && !isHiddenDone(t));
+  } else {
+    tasks = tasks.filter((t) => t.status !== "done");
+  }
+  const who = mem ? UI.esc(mem.name) + "님" : memberId ? "내" : "전체";
+  if (!tasks.length)
+    return `${who} ${mode === "done" ? "오늘 완료한 일" : "할 일"}이 없어요. ${asstLink(
+      "dashboard",
+      "대시보드"
+    )}`;
+  const lines = tasks
+    .slice(0, 10)
+    .map((t) => {
+      const st =
+        t.status === "done"
+          ? "✅ 완료"
+          : t.status === "doing"
+          ? `진행 ${parseInt(t.progress) || 0}%`
+          : "할 일";
+      return `• ${UI.esc(t.title)} <span class="asst-tag">${st}</span>`;
+    })
+    .join("<br>");
+  return `${who} ${mode === "done" ? "오늘 완료" : "할 일"} <b>${tasks.length}건</b>:<br>${lines}<br>${asstLink(
+    "dashboard",
+    "대시보드에서 보기"
+  )}`;
+}
+
+function listEventsAnswer(kind) {
+  const today = UI.todayInput();
+  let events = Store.list("events").filter((e) => e.date);
+  let title;
+  if (kind === "today") {
+    events = events.filter((e) => (e.date || "") <= today && (e.end_date || e.date) >= today);
+    title = "오늘 일정";
+  } else if (kind === "week") {
+    const wk = thisWeekRange();
+    events = events.filter((e) => (e.date || "") <= wk.end && (e.end_date || e.date) >= wk.start);
+    title = "이번 주 일정";
+  } else {
+    events = events.filter((e) => (e.end_date || e.date) >= today);
+    title = "다가오는 일정";
+  }
+  events.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  if (!events.length) return `${title}이 없어요. ${asstLink("calendar", "캘린더")}`;
+  const lines = events
+    .slice(0, 10)
+    .map((e) => `• ${UI.fmtDate(e.date).slice(5)} ${UI.esc(e.title)}`)
+    .join("<br>");
+  return `${title} <b>${events.length}건</b>:<br>${lines}<br>${asstLink("calendar", "캘린더에서 보기")}`;
+}
+
+function listMeetingsAnswer(q) {
+  let ms = Store.list("meetings")
+    .slice()
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  // 키워드(회의/미팅 제외 단어)가 있으면 검색
+  const term = q.replace(/회의록|회의|미팅|최근|찾아|검색|알려줘|보여줘/g, "").trim();
+  if (term) {
+    const tl = term.toLowerCase();
+    ms = ms.filter((m) =>
+      [m.title, m.category, m.body, m.agenda, m.attendees].join(" ").toLowerCase().includes(tl)
+    );
+  }
+  if (!ms.length) return `해당 회의록을 못 찾았어요. ${asstLink("minutes", "회의록")}`;
+  const lines = ms
+    .slice(0, 8)
+    .map((m) => `• ${UI.fmtDate(m.date).slice(0)} ${UI.esc(m.title)}`)
+    .join("<br>");
+  return `회의록 <b>${ms.length}건</b>:<br>${lines}<br>${asstLink("minutes", "회의록에서 보기")}`;
+}
+
+function listReportsAnswer(q) {
+  const mem = findMemberInText(q);
+  let rs = Store.list("reports")
+    .slice()
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  if (mem) rs = rs.filter((r) => r.member_id === mem.id);
+  if (!rs.length) return `보고서가 없어요. ${asstLink("reports", "보고서")}`;
+  const lines = rs
+    .slice(0, 8)
+    .map(
+      (r) =>
+        `• ${reportMeta(r).title.replace(" 보고서", "")} · ${UI.esc(
+          r.period || UI.fmtDate(r.date)
+        )} (${UI.memberName(r.member_id)})`
+    )
+    .join("<br>");
+  return `${mem ? UI.esc(mem.name) + "님 " : ""}보고서 <b>${rs.length}건</b>:<br>${lines}<br>${asstLink(
+    "reports",
+    "보고서에서 보기"
+  )}`;
+}
+
+function listGoalsAnswer(q) {
+  const gs = Store.list("goals");
+  if (!gs.length) return `등록된 업무 목표가 없어요. ${asstLink("goals", "업무 목표")}`;
+  const lines = gs
+    .slice(0, 10)
+    .map((g) => `• ${UI.esc(g.title)} <span class="asst-tag">${parseInt(g.progress) || 0}%</span>`)
+    .join("<br>");
+  return `업무 목표 <b>${gs.length}건</b>:<br>${lines}<br>${asstLink("goals", "업무 목표에서 보기")}`;
+}
+
+function listDocsAnswer(q) {
+  const term = q.replace(/문서|sop|매뉴얼|양식|찾아|검색|알려줘|보여줘/gi, "").trim().toLowerCase();
+  let ds = Store.list("docs");
+  if (term)
+    ds = ds.filter((d) =>
+      [d.title, d.category, d.body].join(" ").toLowerCase().includes(term)
+    );
+  if (!ds.length) return `해당 문서를 못 찾았어요. ${asstLink("docs", "업무 문서")}`;
+  const lines = ds
+    .slice(0, 8)
+    .map((d) => `• ${UI.esc(d.title)} <span class="asst-tag">${UI.esc(d.category || "미분류")}</span>`)
+    .join("<br>");
+  return `업무 문서 <b>${ds.length}건</b>:<br>${lines}<br>${asstLink("docs", "업무 문서에서 보기")}`;
+}
+
+function searchAllAnswer(q) {
+  const ql = q.toLowerCase();
+  const hit = (s) => (s || "").toString().toLowerCase().includes(ql);
+  const groups = [];
+  const add = (label, route, arr, fmt) => {
+    const m = arr.filter(fmt.match).slice(0, 5);
+    if (m.length)
+      groups.push(
+        `<b>${label}</b> (${arr.filter(fmt.match).length})<br>` +
+          m.map((x) => "• " + fmt.line(x)).join("<br>") +
+          `<br>${asstLink(route, label + " 열기")}`
+      );
+  };
+  add("할 일", "dashboard", Store.list("tasks"), {
+    match: (t) => hit(t.title) || hit(t.detail),
+    line: (t) => UI.esc(t.title),
+  });
+  add("일정", "calendar", Store.list("events"), {
+    match: (e) => hit(e.title) || hit(e.note),
+    line: (e) => UI.fmtDate(e.date).slice(5) + " " + UI.esc(e.title),
+  });
+  add("회의록", "minutes", Store.list("meetings"), {
+    match: (m) => hit(m.title) || hit(m.body) || hit(m.agenda),
+    line: (m) => UI.esc(m.title),
+  });
+  add("보고서", "reports", Store.list("reports"), {
+    match: (r) => hit(r.done) || hit(r.todo) || hit(r.note),
+    line: (r) => UI.esc(r.period || UI.fmtDate(r.date)) + " " + UI.memberName(r.member_id),
+  });
+  add("아이디어", "databoard", Store.list("ideas"), {
+    match: (i) => hit(i.title) || hit(i.body),
+    line: (i) => UI.esc(i.title),
+  });
+  add("업무 문서", "docs", Store.list("docs"), {
+    match: (d) => hit(d.title) || hit(d.body),
+    line: (d) => UI.esc(d.title),
+  });
+  add("업무 목표", "goals", Store.list("goals"), {
+    match: (g) => hit(g.title) || hit(g.metric),
+    line: (g) => UI.esc(g.title),
+  });
+  if (!groups.length)
+    return `'${UI.esc(q)}'에 대한 결과를 못 찾았어요. 다른 단어로 검색하거나 '내 할일', '이번 주 일정'처럼 물어보세요.`;
+  return `'${UI.esc(q)}' 검색 결과예요:<br><br>` + groups.join("<br><br>");
 }
 
 function renderHelp() {
@@ -2678,6 +2946,22 @@ async function handleAction(act, el) {
       App.state.helpOpen = !App.state.helpOpen;
       render();
       return;
+    case "asst-toggle":
+      App.state.assistantOpen = !App.state.assistantOpen;
+      render();
+      if (App.state.assistantOpen)
+        setTimeout(() => {
+          const i = document.getElementById("asstInput");
+          if (i) i.focus();
+        }, 30);
+      return;
+    case "asst-send": {
+      const i = document.getElementById("asstInput");
+      if (i) assistantAsk(i.value);
+      return;
+    }
+    case "asst-q":
+      return assistantAsk(el.getAttribute("data-q"));
 
     // 할일
     case "task-view":
@@ -2947,6 +3231,14 @@ function bindGlobalEvents() {
   });
 
   // 해시 라우팅
+  // 비서 입력창 Enter 전송
+  document.body.addEventListener("keydown", (e) => {
+    if (e.target.id === "asstInput" && e.key === "Enter") {
+      e.preventDefault();
+      assistantAsk(e.target.value);
+    }
+  });
+
   window.addEventListener("hashchange", () => {
     App.route = location.hash.replace("#", "") || "dashboard";
     render();
