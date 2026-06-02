@@ -1199,8 +1199,15 @@ function renderCalendar() {
   const monthly = events
     .filter((e) => eventScopes(e).includes("month") && belongsToMonth(e.date, year, month))
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  // 주별 강조는 '이번 주(오늘 기준 월~일)'에 해당하는 일정만
+  const wk = thisWeekRange();
   const weekly = events
-    .filter((e) => eventScopes(e).includes("week") && belongsToMonth(e.date, year, month))
+    .filter(
+      (e) =>
+        eventScopes(e).includes("week") &&
+        (e.date || "") <= wk.end &&
+        (e.end_date || e.date || "") >= wk.start
+    )
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
   const highlight = `
@@ -1214,11 +1221,13 @@ function renderCalendar() {
         }
       </div>
       <div class="hl-box hl-week">
-        <h4>🗓️ 주별 일정</h4>
+        <h4>🗓️ 이번 주 일정 <span class="hl-range">${UI.fmtDate(wk.start).slice(5)}~${UI.fmtDate(
+    wk.end
+  ).slice(5)}</span></h4>
         ${
           weekly.length
             ? weekly.map((e) => highlightItem(e)).join("")
-            : `<div class="empty-mini">등록된 주별 일정이 없습니다</div>`
+            : `<div class="empty-mini">이번 주 주별 일정이 없습니다</div>`
         }
       </div>
     </div>`;
@@ -2166,6 +2175,18 @@ function fmtYMD(x) {
     x.getDate()
   ).padStart(2, "0")}`;
 }
+/* 이번 주(월~일) 범위 - 캘린더 주별 강조용 */
+function thisWeekRange() {
+  const d = new Date();
+  const day = d.getDay();
+  const diffMon = day === 0 ? -6 : 1 - day;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() + diffMon);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return { start: fmtYMD(mon), end: fmtYMD(sun) };
+}
+
 /* 이번 주(월~금) 범위 */
 function currentWeekRange() {
   const d = new Date();
