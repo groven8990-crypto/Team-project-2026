@@ -493,7 +493,8 @@ a { color: inherit; }
 .static-val { font-size: 13px; color: var(--muted); background: var(--panel-2); border-radius: var(--radius-sm); padding: 10px 12px; }
 .img-preview { margin-top: 6px; }
 .img-preview img { max-width: 100%; max-height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); }
-.modal-foot { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+.modal-foot { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.modal-foot .btn { padding-left: 20px; padding-right: 20px; }
 
 /* 목록 검색창 */
 .search-box {
