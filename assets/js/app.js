@@ -142,6 +142,7 @@ const HELP = {
       "【안건 및 결과 표】 안건마다 담당자·기한·완료 여부를 행으로 추가할 수 있어요. '+ 행 추가'로 늘려요.",
       "F/u(후속 과제) 완료 체크박스로 회의 후 후속 과제 처리 여부를 관리해요.",
       "'📑 복제'로 같은 양식의 회의록을 빠르게 재사용할 수 있어요.",
+      "'🖼️ 이미지'를 누르면 회의록을 깔끔한 양식의 PNG 이미지로 저장할 수 있어요.",
       "상단 검색창으로 제목·내용·날짜를 키워드로 검색해 원하는 회의록을 바로 찾아요.",
       "회의록 카드를 클릭하면 전체 내용을 펼쳐 볼 수 있어요.",
     ],
@@ -1823,11 +1824,64 @@ function meetingCard(m) {
       ${m.remarks ? `<div class="meeting-row"><b>비고</b><div>${UI.nl2br(m.remarks)}</div></div>` : ""}
       <div class="card-meta">작성: ${UI.memberChip(m.member_id)}</div>
       <div class="card-actions">
+        <button class="btn xs ghost" data-act="meeting-image" data-id="${m.id}">🖼️ 이미지</button>
         <button class="btn xs ghost" data-act="meeting-duplicate" data-id="${m.id}">📑 복제</button>
         <button class="btn xs ghost" data-act="meeting-edit" data-id="${m.id}">수정</button>
         <button class="btn xs danger" data-act="meeting-del" data-id="${m.id}">삭제</button>
       </div>
     </div>`;
+}
+
+/* 회의록 제출/저장용 시트 (PNG 캡처 대상) */
+function meetingSheetHTML(m) {
+  const itemsTable = meetingItemsTable(m.items);
+  const metaRows = [
+    `<div><span>일시</span><b>${UI.fmtDate(m.date)}${m.time ? " " + UI.esc(m.time) : ""}</b></div>`,
+    m.category ? `<div><span>구분</span><b>${UI.esc(m.category)}</b></div>` : "",
+    m.location ? `<div><span>장소</span><b>${UI.esc(m.location)}</b></div>` : "",
+    m.attendees ? `<div><span>참석자</span><b>${UI.esc(m.attendees)}</b></div>` : "",
+    `<div><span>F/u</span><b>${m.fu_status ? "✅ 완료" : "⬜ 미완료"}</b></div>`,
+  ]
+    .filter(Boolean)
+    .join("");
+  return `
+    <div class="report-sheet">
+      <h1>회의록</h1>
+      <div class="rs-meta">${metaRows}</div>
+      <section><h3>${UI.esc(m.title)}</h3>${itemsTable || ""}</section>
+      ${m.agenda ? `<section><h3>안건</h3><div>${UI.nl2br(m.agenda)}</div></section>` : ""}
+      ${m.body ? `<section><h3>내용</h3><div>${UI.nl2br(m.body)}</div></section>` : ""}
+      ${m.remarks ? `<section><h3>비고</h3><div>${UI.nl2br(m.remarks)}</div></section>` : ""}
+    </div>`;
+}
+
+function meetingToText(m) {
+  const lines = [`[회의록] ${m.title || ""}`];
+  lines.push(`일시: ${UI.fmtDate(m.date)}${m.time ? " " + m.time : ""}`);
+  if (m.category) lines.push(`구분: ${m.category}`);
+  if (m.location) lines.push(`장소: ${m.location}`);
+  if (m.attendees) lines.push(`참석자: ${m.attendees}`);
+  lines.push(`F/u: ${m.fu_status ? "완료" : "미완료"}`);
+  if (Array.isArray(m.items) && m.items.length) {
+    lines.push("\n[안건 및 결과]");
+    m.items.forEach((it) =>
+      lines.push(
+        `- ${it.done ? "[완료] " : ""}${it.agenda || ""}` +
+          `${it.owner ? ` (담당: ${it.owner})` : ""}` +
+          `${it.due ? ` (기한: ${UI.fmtDate(it.due)})` : ""}`
+      )
+    );
+  }
+  if (m.agenda) lines.push(`\n[안건]\n${m.agenda}`);
+  if (m.body) lines.push(`\n[내용]\n${m.body}`);
+  if (m.remarks) lines.push(`\n[비고]\n${m.remarks}`);
+  return lines.join("\n");
+}
+
+function openMeetingImage(m) {
+  if (!m) return;
+  const fname = `회의록_${(m.title || "").slice(0, 30)}_${m.date || ""}`;
+  openSheetModal(meetingSheetHTML(m), meetingToText(m), fname, "회의록 이미지 저장");
 }
 
 function meetingListHTML(q) {
@@ -2533,13 +2587,13 @@ function openReportPreview(r) {
 }
 
 /* 보고서 양식 미리보기 공통 모달 (복사/인쇄·PDF) */
-function openSheetModal(sheetHTML, copyText, filename) {
+function openSheetModal(sheetHTML, copyText, filename, modalTitle) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal report-modal">
       <div class="modal-head">
-        <h3>제출용 보고서</h3>
+        <h3>${UI.esc(modalTitle || "제출용 보고서")}</h3>
         <button class="icon-btn" data-close>✕</button>
       </div>
       <div class="modal-body report-preview-body">${sheetHTML}</div>
@@ -3177,6 +3231,7 @@ async function handleAction(act, el) {
     case "meeting-add": return meetingForm();
     case "meeting-edit": return meetingForm(find("meetings"));
     case "meeting-duplicate": return duplicateMeeting(id);
+    case "meeting-image": return openMeetingImage(find("meetings"));
     case "meeting-del":
       if (await UI.confirmBox("이 기록을 삭제할까요?")) await Store.remove("meetings", id);
       return;
