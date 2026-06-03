@@ -325,10 +325,7 @@ a { color: inherit; }
 .hl-actions { display: flex; gap: 4px; }
 
 .cal-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.cal-toolbar strong { font-size: 16px; }
-.cal-select { font-family: inherit; font-size: 14px; font-weight: 700; color: var(--ink); background: #fff; border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; }
-.cal-select:hover { border-color: var(--brand); }
-.cal-select:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
+.cal-toolbar strong { font-size: 16px; min-width: 100px; text-align: center; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; box-shadow: var(--shadow); }
 .cal-cell { min-width: 0; }
 .cal-ev, .cal-ev-wrap { max-width: 100%; }

@@ -189,7 +189,7 @@ const HELP = {
       "  · 주별 일정 카드에는 참여자의 성(姓)이 색상 원으로 표시돼요.",
       "  · 참여자가 많으면 '+N명' 형식으로 줄여서 보여요.",
       "토요일은 파란색, 일요일·공휴일은 빨간색으로 표시돼요. 대한민국 공휴일은 날짜 칸에 이름이 함께 나와요.",
-      "좌우 화살표(‹ ›)로 한 달씩 이동하거나, 연도·월 드롭다운에서 직접 골라 바로 이동할 수 있어요. '오늘'을 누르면 이번 달로 돌아와요.",
+      "‹ › 화살표로 한 달씩, « » 화살표로 한 해씩 이동할 수 있어요. '오늘'을 누르면 이번 달로 돌아와요.",
     ],
   },
   databoard: {
@@ -1384,18 +1384,6 @@ async function duplicateDoc(id) {
   UI.toast("복제되었습니다. 수정해서 사용하세요");
 }
 
-/* 연도 선택 옵션 (현재 연도 기준 ±5년, 현재 보기 연도 포함) */
-function calYearOptions(selected) {
-  const base = new Date().getFullYear();
-  const years = new Set();
-  for (let y = base - 3; y <= base + 5; y++) years.add(y);
-  years.add(selected);
-  return Array.from(years)
-    .sort((a, b) => a - b)
-    .map((y) => `<option value="${y}" ${y === selected ? "selected" : ""}>${y}년</option>`)
-    .join("");
-}
-
 /* ============ 캘린더 ============ */
 function renderCalendar() {
   const ref = App.state.calendarRef;
@@ -1448,16 +1436,11 @@ function renderCalendar() {
       </div>
       ${highlight}
       <div class="cal-toolbar">
-        <button class="icon-btn" data-act="cal-prev">‹</button>
-        <select id="calYear" class="cal-select" aria-label="연도 선택">
-          ${calYearOptions(year)}
-        </select>
-        <select id="calMonth" class="cal-select" aria-label="월 선택">
-          ${Array.from({ length: 12 }, (_, i) =>
-            `<option value="${i}" ${i === month ? "selected" : ""}>${i + 1}월</option>`
-          ).join("")}
-        </select>
-        <button class="icon-btn" data-act="cal-next">›</button>
+        <button class="icon-btn" data-act="cal-year-prev" title="이전 연도">«</button>
+        <button class="icon-btn" data-act="cal-prev" title="이전 달">‹</button>
+        <strong>${year}년 ${month + 1}월</strong>
+        <button class="icon-btn" data-act="cal-next" title="다음 달">›</button>
+        <button class="icon-btn" data-act="cal-year-next" title="다음 연도">»</button>
         <button class="btn ghost sm" data-act="cal-today">오늘</button>
       </div>
       ${calendarGrid(year, month, events)}
@@ -3294,6 +3277,22 @@ async function handleAction(act, el) {
       );
       render();
       return;
+    case "cal-year-prev":
+      App.state.calendarRef = new Date(
+        App.state.calendarRef.getFullYear() - 1,
+        App.state.calendarRef.getMonth(),
+        1
+      );
+      render();
+      return;
+    case "cal-year-next":
+      App.state.calendarRef = new Date(
+        App.state.calendarRef.getFullYear() + 1,
+        App.state.calendarRef.getMonth(),
+        1
+      );
+      render();
+      return;
     case "cal-today":
       App.state.calendarRef = new Date();
       render();
@@ -3456,13 +3455,6 @@ function bindGlobalEvents() {
     }
     if (e.target.id === "kptMine") {
       App.state.kptMineOnly = e.target.checked;
-      render();
-    }
-    // 캘린더 연도/월 선택 이동
-    if (e.target.id === "calYear" || e.target.id === "calMonth") {
-      const y = parseInt(document.getElementById("calYear").value);
-      const m = parseInt(document.getElementById("calMonth").value);
-      App.state.calendarRef = new Date(y, m, 1);
       render();
     }
     // 진행률 인라인 수정 (대시보드) — 진행률에 따라 상태도 자동 변경
