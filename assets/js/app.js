@@ -162,13 +162,13 @@ const HELP = {
     items: [
       "【일일 보고】 오늘 한 일·내일 할 일·특이사항을 작성해요.",
       "  · '⚡ 자동생성'을 누르면 오늘 진행 중·완료된 업무가 진행률과 함께 자동으로 채워져요.",
-      "  · 작성 후 '📄 제출 양식'을 누르면 인쇄·PDF 저장용 양식이 열려요.",
+      "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
       "【주간 계획】 이번 주에 할 계획을 미리 작성하는 보고서예요 (지난 주 실적 정리가 아니에요!).",
       "  · '⚡ 자동생성'을 누르면 이번 주 등록된 업무·일정이 초안으로 채워져요.",
       "  · 주간 목표 진행률은 본인의 전체 업무 평균 진행률을 자동으로 계산해 넣어요.",
       "【월간 계획】 이번 달 계획을 미리 작성하는 보고서예요. 자동생성으로 이달 업무·일정 초안이 만들어져요.",
       "【날짜별 취합】 달력에서 날짜를 선택하면 그날 팀원 4명의 일일 보고가 한 화면에 모여요.",
-      "  · '취합 제출 양식 열기'를 누르면 2×2 격자 레이아웃으로 인쇄·PDF 저장할 수 있어요.",
+      "  · '취합 제출 양식 열기'를 누르면 2×2 격자 레이아웃으로 보이고, 'PNG 이미지 저장'으로 한 장의 이미지로 내려받을 수 있어요.",
       "  · 취합 양식의 팀원 순서는 멤버 탭에서 지정한 순서를 따라요.",
     ],
   },
@@ -2068,7 +2068,7 @@ function renderReports() {
     return `
       <section class="view">
         <div class="view-head"><h2>날짜별 취합 보고</h2></div>
-        <p class="muted">날짜를 클릭하면 그날 팀원들이 작성한 일일보고를 모아 보고, 한 장으로 취합해 출력(PDF)할 수 있어요.</p>
+        <p class="muted">날짜를 클릭하면 그날 팀원들이 작성한 일일보고를 모아 보고, 한 장의 PNG 이미지로 저장할 수 있어요.</p>
         ${toggle}
         ${renderReportsCollect()}
       </section>`;
@@ -2280,7 +2280,7 @@ function openCombinedReport(date) {
         : `[${UI.memberName(m.id)}] 미작성`
     )
     .join("\n\n────────────\n\n");
-  openSheetModal(combinedSheetHTML(date), text);
+  openSheetModal(combinedSheetHTML(date), text, `일일보고_취합_${date}`);
 }
 
 function buildAutoReportDraft() {
@@ -2528,11 +2528,13 @@ function reportSheetHTML(r) {
 /* 제출용 보고서 미리보기 (복사/인쇄·PDF) */
 function openReportPreview(r) {
   if (!r) return;
-  openSheetModal(reportSheetHTML(r), reportToText(r));
+  const meta = reportMeta(r);
+  const fname = `${meta.title}_${UI.memberName(r.member_id)}_${r.date || ""}`;
+  openSheetModal(reportSheetHTML(r), reportToText(r), fname);
 }
 
 /* 보고서 양식 미리보기 공통 모달 (복사/인쇄·PDF) */
-function openSheetModal(sheetHTML, copyText) {
+function openSheetModal(sheetHTML, copyText, filename) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
@@ -2544,7 +2546,7 @@ function openSheetModal(sheetHTML, copyText) {
       <div class="modal-body report-preview-body">${sheetHTML}</div>
       <div class="modal-foot">
         <button class="btn ghost" data-copy>📋 복사</button>
-        <button class="btn primary" data-print>🖨️ 인쇄 · PDF 저장</button>
+        <button class="btn primary" data-png>🖼️ PNG 이미지 저장</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -2561,18 +2563,43 @@ function openSheetModal(sheetHTML, copyText) {
       UI.toast("복사 권한이 없습니다", "warn");
     }
   };
-  overlay.querySelector("[data-print]").onclick = () => printReport(sheetHTML);
+  const sheetEl = overlay.querySelector(".report-sheet");
+  overlay.querySelector("[data-png]").onclick = (e) =>
+    downloadSheetPNG(sheetEl, filename, e.currentTarget);
 }
 
-function printReport(html) {
-  let root = document.getElementById("printRoot");
-  if (!root) {
-    root = document.createElement("div");
-    root.id = "printRoot";
-    document.body.appendChild(root);
+/* 보고서 시트를 PNG 이미지 파일로 저장 */
+async function downloadSheetPNG(sheetEl, filename, btn) {
+  if (!window.html2canvas) {
+    UI.toast("이미지 변환 모듈을 불러오지 못했어요. 새로고침 후 다시 시도해주세요", "warn");
+    return;
   }
-  root.innerHTML = html;
-  window.print();
+  if (!sheetEl) return;
+  const label = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "이미지 만드는 중…";
+  }
+  try {
+    const canvas = await html2canvas(sheetEl, {
+      backgroundColor: "#ffffff",
+      scale: Math.min(window.devicePixelRatio || 1, 2) * 1.5,
+      useCORS: true,
+    });
+    const link = document.createElement("a");
+    link.download = (filename || "보고서") + ".png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+    UI.toast("PNG 이미지로 저장했어요");
+  } catch (err) {
+    console.error(err);
+    UI.toast("이미지 저장에 실패했어요", "warn");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
 }
 
 /* ============ 멤버 관리 ============ */
