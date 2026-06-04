@@ -2389,6 +2389,25 @@ function reportCollectCalendar() {
     <div class="cal-grid collect-grid">${wd}${cells}</div>`;
 }
 
+/* hex 두 색을 비율로 섞기 (CSS color-mix 대체 — html2canvas 호환용)
+   color-mix()는 최신 브라우저에서 oklab/color(srgb)로 계산돼 html2canvas가
+   파싱하지 못하므로, 캡처 대상에는 미리 계산한 rgb 값을 인라인으로 넣는다. */
+function hexToRgb(h) {
+  let s = String(h || "").trim().replace("#", "");
+  if (s.length === 3) s = s.split("").map((c) => c + c).join("");
+  if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
+  const n = parseInt(s, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function mixHex(hexA, hexB, pctA) {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  if (!a || !b) return hexA; // 파싱 실패 시 원본 색 사용
+  const p = Math.max(0, Math.min(100, pctA)) / 100;
+  const m = (x, y) => Math.round(x * p + y * (1 - p));
+  return `rgb(${m(a.r, b.r)}, ${m(a.g, b.g)}, ${m(a.b, b.b)})`;
+}
+
 function combinedSheetHTML(date) {
   const members = Store.list("members"); // 등록 순서
   const reps = Store.list("reports").filter(
@@ -2408,9 +2427,10 @@ function combinedSheetHTML(date) {
         <div class="cmb-row"><b>내일 할 일</b><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></div>
         ${r.note ? `<div class="cmb-row"><b>특이사항</b><div>${UI.nl2br(r.note)}</div></div>` : ""}`
         : `<div class="cmb-empty">미작성</div>`;
+      const nameStyle = `background:${mixHex(color, "#ffffff", 16)};color:${mixHex(color, "#1f2937", 80)}`;
       return `
         <div class="cmb-card ${r ? "" : "is-empty"}" style="--c:${UI.esc(color)}">
-          <div class="cmb-head"><span class="cmb-name">${UI.esc(m.name)}</span></div>
+          <div class="cmb-head"><span class="cmb-name" style="${nameStyle}">${UI.esc(m.name)}</span></div>
           <div class="cmb-body">${body}</div>
         </div>`;
     })
