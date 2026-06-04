@@ -150,9 +150,11 @@ const HELP = {
       "  · 진행률 슬라이더를 움직이면 값이 즉시 저장되고, 1% 이상이면 자동으로 '진행 중'으로 변경돼요.",
       "  · 100%로 올리면 자동으로 '완료' 처리되고 완료 날짜가 기록돼요.",
       "  · 완료된 업무는 당일 이후에는 '완료 ▼' 접힌 섹션 안에 숨겨져요. 클릭하면 펼칠 수 있어요.",
+      "  · 어제 이전에 완료한 일은 '🗂️ 지난 완료한 일 ▼'을 눌러 따로 모아볼 수 있어요.",
       "【전체 보기】 할 일 / 진행 중 / 완료 3단 칸반 레이아웃이에요.",
       "  · 카드의 ▶ 버튼으로 '진행 중'으로, ✓ 버튼으로 '완료'로 상태를 바꿔요.",
       "  · 이미 진행 중이면 ✓ 버튼만 표시돼요.",
+      "  · 완료 칸 맨 아래 '🗂️ 지난 완료한 일 ▼'으로 예전에 끝낸 업무도 다시 볼 수 있어요.",
     ],
   },
   goals: {
@@ -277,6 +279,7 @@ const App = {
     minutesSearch: "", // 회의록 검색어
     reportSearch: "", // 보고서 검색어
     doneExpanded: {}, // 사람별 보기: 완료 목록 펼침 상태 (memberId→bool)
+    pastDoneExpanded: {}, // 지난(어제 이전) 완료 목록 펼침 상태 (memberId|"kanban"→bool)
     assistantOpen: false, // 업무 비서 열림
     assistantMsgs: [], // 비서 대화 내역
     reportDate: null, // 취합 보기 선택 날짜
@@ -639,8 +642,23 @@ function renderDashboard() {
     let items = tasks
       .filter((t) => t.status === col.key)
       .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
-    // 완료 칸: 어제 이전 완료는 숨김(오늘 완료만)
-    if (col.key === "done") items = items.filter((t) => !isHiddenDone(t));
+    let pastBlock = "";
+    // 완료 칸: 오늘 완료만 기본 노출, 지난 완료는 토글로 펼치기
+    if (col.key === "done") {
+      const past = items
+        .filter((t) => isHiddenDone(t))
+        .sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+      items = items.filter((t) => !isHiddenDone(t));
+      if (past.length) {
+        const open = !!App.state.pastDoneExpanded.kanban;
+        pastBlock = `
+          <button class="done-toggle past" data-act="toggle-past-done" data-member="kanban">
+            <span>🗂️ 지난 완료한 일 ${past.length}개</span>
+            <span>${open ? "▲ 접기" : "▼ 보기"}</span>
+          </button>
+          ${open ? past.map((t) => taskCard(t)).join("") : ""}`;
+      }
+    }
     const cards = items.length
       ? items.map((t) => taskCard(t)).join("")
       : `<div class="empty-mini">${
@@ -651,7 +669,7 @@ function renderDashboard() {
         <div class="kanban-head">
           <span>${col.label} <b>${items.length}</b></span>
         </div>
-        <div class="kanban-body">${cards}</div>
+        <div class="kanban-body">${cards}${pastBlock}</div>
       </div>`;
   }).join("");
 
@@ -738,6 +756,9 @@ function personSection(name, color, memberId, tasks, isMe) {
   const doneToday = tasks.filter(
     (t) => t.status === "done" && (!t.done_at || t.done_at === today)
   );
+  const pastDone = tasks
+    .filter((t) => isHiddenDone(t))
+    .sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
 
   const doing = tasks.filter((t) => t.status === "doing").length;
   const todo = tasks.filter((t) => t.status === "todo").length;
@@ -756,6 +777,16 @@ function personSection(name, color, memberId, tasks, isMe) {
       ${open ? doneToday.map((t) => personTaskRow(t)).join("") : ""}`
     : "";
 
+  const pastOpen = !!App.state.pastDoneExpanded[memberId];
+  const pastBlock = pastDone.length
+    ? `
+      <button class="done-toggle past" data-act="toggle-past-done" data-member="${memberId}">
+        <span>🗂️ 지난 완료한 일 ${pastDone.length}개</span>
+        <span>${pastOpen ? "▲ 접기" : "▼ 보기"}</span>
+      </button>
+      ${pastOpen ? pastDone.map((t) => personTaskRow(t)).join("") : ""}`
+    : "";
+
   return `
     <div class="person-block">
       <div class="person-head">
@@ -763,7 +794,7 @@ function personSection(name, color, memberId, tasks, isMe) {
         ${isMe ? `<span class="chip chip-me">나</span>` : ""}
         <span class="person-counts">진행 ${doing} · 할일 ${todo} · 오늘 완료 ${doneToday.length}</span>
       </div>
-      <div class="person-tasks">${activeRows}${doneBlock}</div>
+      <div class="person-tasks">${activeRows}${doneBlock}${pastBlock}</div>
     </div>`;
 }
 
@@ -3221,6 +3252,11 @@ async function handleAction(act, el) {
     case "toggle-done":
       App.state.doneExpanded[el.getAttribute("data-member")] =
         !App.state.doneExpanded[el.getAttribute("data-member")];
+      render();
+      return;
+    case "toggle-past-done":
+      App.state.pastDoneExpanded[el.getAttribute("data-member")] =
+        !App.state.pastDoneExpanded[el.getAttribute("data-member")];
       render();
       return;
     case "task-del":

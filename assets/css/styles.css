@@ -247,6 +247,7 @@ a { color: inherit; }
   font-family: inherit;
 }
 .done-toggle:hover { background: #eef1f6; }
+.done-toggle.past { border-color: var(--line-2); color: #94a3b8; }
 .done-date { color: var(--ok); font-weight: 700; }
 
 /* 모달 안건 표 입력 */
