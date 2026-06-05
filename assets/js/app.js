@@ -210,6 +210,7 @@ const HELP = {
     items: [
       "'+ 회의록 작성'으로 회의 구분·일시·장소·참석자·비고를 기록해요.",
       "【안건 및 결과 표】 안건마다 담당자·기한·완료 여부를 행으로 추가할 수 있어요. '+ 행 추가'로 늘려요.",
+      "회의록 카드의 '완료' 칸 ⬜/✅를 바로 클릭하면 수정 화면에 들어가지 않고도 처리 여부가 즉시 토글돼요.",
       "F/u(후속 과제) 완료 체크박스로 회의 후 후속 과제 처리 여부를 관리해요.",
       "'📑 복제'로 같은 양식의 회의록을 빠르게 재사용할 수 있어요.",
       "'🖼️ 이미지'를 누르면 회의록을 깔끔한 양식의 PNG 이미지로 저장할 수 있어요.",
@@ -1890,18 +1891,23 @@ async function linkForm(existing) {
 }
 
 /* ============ 회의록 ============ */
-function meetingItemsTable(items) {
+/* meetingId를 넘기면 '완료' 칸이 클릭 가능한 토글 버튼으로 렌더됨(카드용).
+   넘기지 않으면 정적 아이콘으로 렌더(PNG 시트/캡처용). */
+function meetingItemsTable(items, meetingId) {
   if (!Array.isArray(items) || !items.length) return "";
   const rows = items
-    .map(
-      (it) => `
+    .map((it, i) => {
+      const check = meetingId
+        ? `<button type="button" class="mi-check ${it.done ? "on" : ""}" data-act="meeting-item-toggle" data-id="${meetingId}" data-idx="${i}" aria-pressed="${it.done ? "true" : "false"}" title="완료 표시 전환">${it.done ? "✅" : "⬜"}</button>`
+        : it.done ? "✅" : "⬜";
+      return `
       <tr class="${it.done ? "done" : ""}">
-        <td class="ta-c">${it.done ? "✅" : "⬜"}</td>
+        <td class="ta-c">${check}</td>
         <td>${UI.esc(it.agenda || "")}</td>
         <td class="ta-c">${it.owner ? UI.esc(it.owner) : "-"}</td>
         <td class="ta-c nowrap">${it.due ? UI.fmtDate(it.due) : "-"}</td>
-      </tr>`
-    )
+      </tr>`;
+    })
     .join("");
   return `
     <table class="meeting-items">
@@ -1925,7 +1931,7 @@ function meetingCard(m) {
         ${m.attendees ? `<span><b>참석자</b> ${UI.esc(m.attendees)}</span>` : ""}
         <span><b>F/u</b> ${m.fu_status ? "✅ 완료" : "⬜ 미완료"}</span>
       </div>
-      ${meetingItemsTable(m.items)}
+      ${meetingItemsTable(m.items, m.id)}
       ${m.agenda ? `<div class="meeting-row"><b>안건</b><div>${UI.nl2br(m.agenda)}</div></div>` : ""}
       ${m.body ? `<div class="meeting-row"><b>내용</b><div>${UI.nl2br(m.body)}</div></div>` : ""}
       ${m.remarks ? `<div class="meeting-row"><b>비고</b><div>${UI.nl2br(m.remarks)}</div></div>` : ""}
@@ -3379,6 +3385,17 @@ async function handleAction(act, el) {
     case "meeting-add": return meetingForm();
     case "meeting-edit": return meetingForm(find("meetings"));
     case "meeting-duplicate": return duplicateMeeting(id);
+    case "meeting-item-toggle": {
+      const m = find("meetings");
+      if (!m || !Array.isArray(m.items)) return;
+      const idx = parseInt(el.getAttribute("data-idx"));
+      if (isNaN(idx) || !m.items[idx]) return;
+      const items = m.items.map((it, i) =>
+        i === idx ? { ...it, done: !it.done } : it
+      );
+      await Store.update("meetings", id, { items });
+      return;
+    }
     case "meeting-image": return openMeetingImage(find("meetings"));
     case "meeting-del":
       if (await UI.confirmBox("이 기록을 삭제할까요?")) await Store.remove("meetings", id);

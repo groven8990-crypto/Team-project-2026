@@ -388,6 +388,13 @@ a { color: inherit; }
 .meeting-items td.nowrap { white-space: nowrap; }
 .meeting-items tr.done td { color: var(--muted); text-decoration: line-through; }
 .meeting-items tr.done td.ta-c:first-child { text-decoration: none; }
+.mi-check {
+  border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1;
+  padding: 4px 6px; border-radius: 6px; font-family: inherit; transition: background .12s, transform .12s;
+}
+.mi-check:hover { background: #eef2f7; transform: scale(1.12); }
+.mi-check:active { transform: scale(.95); }
+.mi-check:focus-visible { outline: none; box-shadow: var(--ring); }
 
 /* ===== KPT ===== */
 .filter-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
