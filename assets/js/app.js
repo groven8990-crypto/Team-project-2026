@@ -199,6 +199,7 @@ const HELP = {
     items: [
       "【자료실】 팀이 함께 쓰는 이미지와 링크를 올려두는 공간이에요.",
       "  · 이미지는 파일을 직접 업로드할 수 있어요 (로컬 모드에서는 3MB 이하 권장).",
+      "  · 올린 이미지를 클릭하면 크게 볼 수 있고, '⬇ 저장'으로 내 기기에 내려받을 수 있어요.",
       "  · 링크(URL)도 제목과 함께 저장해 바로 클릭해 열 수 있어요.",
       "【아이디어 노트】 회의 중 떠오른 아이디어나 메모를 자유롭게 기록해요.",
       "【링크 모음】 자주 방문하는 사이트·참고 문서를 모아두는 북마크예요.",
@@ -516,7 +517,7 @@ function renderHome() {
   // --- 위젯: 자료실 ---
   const resBody = recentResources.length
     ? `<div class="home-thumbs">${recentResources
-        .map((r) => `<div class="home-thumb"><img src="${UI.esc(r.image_data)}" alt=""></div>`)
+        .map((r) => `<div class="home-thumb clickable" data-act="res-view" data-id="${r.id}" title="클릭하면 크게 보기"><img src="${UI.esc(r.image_data)}" alt=""></div>`)
         .join("")}</div>`
     : `<div class="empty-mini">올라온 자료가 없습니다</div>`;
 
@@ -1704,7 +1705,7 @@ function renderResources() {
         .map((r) => {
           const media =
             r.kind === "image" && r.image_data
-              ? `<div class="res-thumb"><img src="${UI.esc(r.image_data)}" alt=""></div>`
+              ? `<div class="res-thumb clickable" data-act="res-view" data-id="${r.id}" title="클릭하면 크게 보기"><img src="${UI.esc(r.image_data)}" alt=""></div>`
               : r.kind === "link"
               ? `<div class="res-thumb link"><a href="${UI.esc(
                   r.url
@@ -1734,6 +1735,56 @@ function renderResources() {
       <button class="btn primary" data-act="res-add">+ 자료 올리기</button>
     </div>
     <div class="res-grid">${grid}</div>`;
+}
+
+/* data URL(MIME)에서 다운로드용 확장자 추출 */
+function dataUrlExt(dataUrl) {
+  const m = /^data:image\/([a-zA-Z0-9.+-]+)/.exec(dataUrl || "");
+  if (!m) return ".png";
+  let ext = m[1].toLowerCase();
+  if (ext === "jpeg") ext = "jpg";
+  if (ext === "svg+xml") ext = "svg";
+  return "." + ext;
+}
+
+/* 자료실 이미지 크게 보기 + 저장(다운로드) 뷰어 */
+function openImageViewer(r) {
+  if (!r || !r.image_data) return;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay img-viewer";
+  overlay.innerHTML = `
+    <div class="img-viewer-box">
+      <div class="img-viewer-head">
+        <strong>${UI.esc(r.title || "이미지")}</strong>
+        <div class="img-viewer-actions">
+          <button class="btn ghost sm" data-download>⬇ 저장</button>
+          <button class="icon-btn" data-close title="닫기">✕</button>
+        </div>
+      </div>
+      <div class="img-viewer-body"><img src="${UI.esc(r.image_data)}" alt="${UI.esc(r.title || "")}"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  document.addEventListener("keydown", onKey);
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) close();
+  });
+  overlay.querySelector("[data-close]").onclick = close;
+  overlay.querySelector("[data-download]").onclick = () => {
+    const a = document.createElement("a");
+    a.href = r.image_data;
+    a.download = (r.title || "이미지").replace(/[\\/:*?"<>|]/g, "_") + dataUrlExt(r.image_data);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    UI.toast("이미지를 저장했어요");
+  };
 }
 
 async function resourceForm(existing) {
@@ -3366,6 +3417,7 @@ async function handleAction(act, el) {
       render();
       return;
     case "res-add": return resourceForm();
+    case "res-view": return openImageViewer(find("resources"));
     case "res-edit": return resourceForm(find("resources"));
     case "res-del":
       if (await UI.confirmBox("이 자료를 삭제할까요?")) await Store.remove("resources", id);

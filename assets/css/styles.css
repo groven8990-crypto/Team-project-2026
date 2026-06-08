@@ -362,6 +362,8 @@ a { color: inherit; }
 .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
 .res-thumb { border-radius: 8px; overflow: hidden; background: #f1f5f9; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
 .res-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.res-thumb.clickable img, .home-thumb.clickable img { transition: transform .18s ease; }
+.res-thumb.clickable:hover img, .home-thumb.clickable:hover img { transform: scale(1.05); }
 .res-thumb.link, .res-thumb.file { font-size: 13px; padding: 10px; word-break: break-all; text-align: center; }
 .res-info strong { font-size: 14px; }
 
@@ -508,6 +510,19 @@ a { color: inherit; }
 .img-preview img { max-width: 100%; max-height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); }
 .modal-foot { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
 .modal-foot .btn { padding-left: 20px; padding-right: 20px; }
+
+/* 이미지 크게 보기 뷰어 */
+.modal-overlay.img-viewer { align-items: center; padding: 32px 16px; }
+.img-viewer-box {
+  background: #fff; border-radius: 16px; width: 100%; max-width: 880px;
+  box-shadow: var(--shadow-lg); animation: pop .16s cubic-bezier(.2,.8,.3,1);
+  display: flex; flex-direction: column; max-height: calc(100vh - 64px); overflow: hidden;
+}
+.img-viewer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.img-viewer-head strong { font-size: 15px; font-weight: 800; letter-spacing: -0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.img-viewer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.img-viewer-body { padding: 16px; overflow: auto; background: #0b1524; display: flex; align-items: center; justify-content: center; }
+.img-viewer-body img { max-width: 100%; max-height: calc(100vh - 180px); object-fit: contain; border-radius: 6px; }
 
 /* 목록 검색창 */
 .search-box {
