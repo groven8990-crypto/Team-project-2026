@@ -236,7 +236,7 @@ const HELP = {
     items: [
       "【일일 보고】 오늘 한 일·내일 할 일·특이사항을 작성해요.",
       "  · '⚡ 자동생성'을 누르면 오늘 진행 중·완료된 업무가 진행률과 함께 자동으로 채워져요.",
-      "  · 상세내용이 있는 업무가 있으면, 자동생성 시 '오늘 한 일'에 상세까지 넣을 업무를 골라서 그것만 상세가 들어가요(내일 할 일은 항상 제목만).",
+      "  · 상세내용이 있는 업무가 있으면, 자동생성 시 '오늘 한 일'에 상세까지 넣을 업무를 골라요. 고른 업무는 제목이 굵게 표시되고 아래에 '-'로 상세가 붙어요(내일 할 일은 항상 제목만).",
       "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
       "【주간 계획】 이번 주에 할 계획을 미리 작성하는 보고서예요 (지난 주 실적 정리가 아니에요!).",
       "  · '⚡ 자동생성'을 누르면 이번 주 등록된 업무·일정이 초안으로 채워져요.",
@@ -2460,9 +2460,9 @@ function dailyCard(r) {
         <strong>${UI.fmtDate(r.date)} 일일 보고</strong>
         ${UI.memberChip(r.member_id)}
       </div>
-      ${r.done ? `<div class="report-row"><b>오늘 한 일</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
-      ${r.todo ? `<div class="report-row"><b>내일 할 일</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
-      ${r.note ? `<div class="report-row"><b>특이사항</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
+      ${r.done ? `<div class="report-row"><b>오늘 한 일</b><div>${reportRich(r.done)}</div></div>` : ""}
+      ${r.todo ? `<div class="report-row"><b>내일 할 일</b><div>${reportRich(r.todo)}</div></div>` : ""}
+      ${r.note ? `<div class="report-row"><b>특이사항</b><div>${reportRich(r.note)}</div></div>` : ""}
       <div class="card-actions">
         <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
         <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
@@ -2485,9 +2485,9 @@ function planCard(r) {
         ${UI.memberChip(r.member_id)}
       </div>
       ${r.progress ? progressBar(r.progress, meta.progressLabel) : ""}
-      ${r.done ? `<div class="report-row"><b>${meta.s1}</b><div>${UI.nl2br(r.done)}</div></div>` : ""}
-      ${r.todo ? `<div class="report-row"><b>${meta.s2}</b><div>${UI.nl2br(r.todo)}</div></div>` : ""}
-      ${r.note ? `<div class="report-row"><b>${meta.s3}</b><div>${UI.nl2br(r.note)}</div></div>` : ""}
+      ${r.done ? `<div class="report-row"><b>${meta.s1}</b><div>${reportRich(r.done)}</div></div>` : ""}
+      ${r.todo ? `<div class="report-row"><b>${meta.s2}</b><div>${reportRich(r.todo)}</div></div>` : ""}
+      ${r.note ? `<div class="report-row"><b>${meta.s3}</b><div>${reportRich(r.note)}</div></div>` : ""}
       <div class="card-actions">
         <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
         <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
@@ -2598,9 +2598,9 @@ function combinedSheetHTML(date) {
       const color = m.color || "#64748b";
       const body = r
         ? `
-        <div class="cmb-row"><b>오늘 한 일</b><div>${r.done ? UI.nl2br(r.done) : "-"}</div></div>
-        <div class="cmb-row"><b>내일 할 일</b><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></div>
-        ${r.note ? `<div class="cmb-row"><b>특이사항</b><div>${UI.nl2br(r.note)}</div></div>` : ""}`
+        <div class="cmb-row"><b>오늘 한 일</b><div>${r.done ? reportRich(r.done) : "-"}</div></div>
+        <div class="cmb-row"><b>내일 할 일</b><div>${r.todo ? reportRich(r.todo) : "-"}</div></div>
+        ${r.note ? `<div class="cmb-row"><b>특이사항</b><div>${reportRich(r.note)}</div></div>` : ""}`
         : `<div class="cmb-empty">미작성</div>`;
       const nameStyle = `background:${mixHex(color, "#ffffff", 16)};color:${mixHex(color, "#1f2937", 80)}`;
       return `
@@ -2655,16 +2655,16 @@ function buildAutoReportDraft(detailIds) {
   const todoTasks = mineTasks.filter((t) => t.status === "todo");
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
-  // 오늘 한 일 줄: 선택된 업무만 상세내용(↳)을 제목 아래 덧붙임
+  // 오늘 한 일 줄: 선택된 업무는 제목을 굵게(**)하고 아래에 - 로 상세내용 표기
   const fmtDone = (t, suffix) => {
-    const head = `- ${t.title}${suffix ? " " + suffix : ""}`;
+    const title = `${t.title}${suffix ? " " + suffix : ""}`;
     const detail = (t.detail || "").trim();
-    if (!detailSet.has(t.id) || !detail) return head;
+    if (!detailSet.has(t.id) || !detail) return `- ${title}`;
     const body = detail
       .split(/\r?\n/)
-      .map((s) => "  ↳ " + s.trim())
+      .map((s) => "  - " + s.trim())
       .join("\n");
-    return head + "\n" + body;
+    return `**${title}**\n${body}`;
   };
 
   const doneLines = [];
@@ -2893,14 +2893,25 @@ async function reportForm(existing, preset) {
   UI.toast("보고서가 저장되었습니다");
 }
 
+/* 보고서 본문 렌더: **굵게** 지원 + 줄바꿈 유지 (esc 후 처리해 안전) */
+function reportRich(s) {
+  return UI.esc(s || "")
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/\n/g, "<br>");
+}
+/* 복사/내보내기용 평문: ** 굵게 마커 제거 */
+function stripMd(s) {
+  return String(s || "").replace(/\*\*(.+?)\*\*/g, "$1");
+}
+
 function reportToText(r) {
   const meta = reportMeta(r);
   const period = isDailyReport(r) ? UI.fmtDate(r.date) : r.period || UI.fmtDate(r.date);
   return (
     `[${meta.title}] ${period} / ${UI.memberName(r.member_id)}\n\n` +
-    `■ ${meta.s1}\n${r.done || "-"}\n\n` +
-    `■ ${meta.s2}\n${r.todo || "-"}\n\n` +
-    `■ ${meta.s3}\n${r.note || "-"}`
+    `■ ${meta.s1}\n${stripMd(r.done) || "-"}\n\n` +
+    `■ ${meta.s2}\n${stripMd(r.todo) || "-"}\n\n` +
+    `■ ${meta.s3}\n${stripMd(r.note) || "-"}`
   );
 }
 
@@ -2922,9 +2933,9 @@ function reportSheetHTML(r) {
             : ""
         }
       </div>
-      <section><h3>${meta.s1}</h3><div>${r.done ? UI.nl2br(r.done) : "-"}</div></section>
-      <section><h3>${meta.s2}</h3><div>${r.todo ? UI.nl2br(r.todo) : "-"}</div></section>
-      <section><h3>${meta.s3}</h3><div>${r.note ? UI.nl2br(r.note) : "-"}</div></section>
+      <section><h3>${meta.s1}</h3><div>${r.done ? reportRich(r.done) : "-"}</div></section>
+      <section><h3>${meta.s2}</h3><div>${r.todo ? reportRich(r.todo) : "-"}</div></section>
+      <section><h3>${meta.s3}</h3><div>${r.note ? reportRich(r.note) : "-"}</div></section>
     </div>`;
 }
 
