@@ -2893,15 +2893,18 @@ async function reportForm(existing, preset) {
   UI.toast("보고서가 저장되었습니다");
 }
 
-/* 보고서 본문 렌더: **굵게** 지원 + 줄바꿈 유지 (esc 후 처리해 안전) */
+/* 보고서 본문 렌더: **굵게** 지원 + 줄바꿈 유지 (esc 후 처리해 안전)
+   예전 데이터에 남은 ↳ 화살표는 - 로 정리 */
 function reportRich(s) {
-  return UI.esc(s || "")
+  return UI.esc(String(s || "").replace(/↳/g, "-"))
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
     .replace(/\n/g, "<br>");
 }
-/* 복사/내보내기용 평문: ** 굵게 마커 제거 */
+/* 복사/내보내기용 평문: ** 굵게 마커 제거, ↳ → - */
 function stripMd(s) {
-  return String(s || "").replace(/\*\*(.+?)\*\*/g, "$1");
+  return String(s || "")
+    .replace(/↳/g, "-")
+    .replace(/\*\*(.+?)\*\*/g, "$1");
 }
 
 function reportToText(r) {
