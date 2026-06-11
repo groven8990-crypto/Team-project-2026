@@ -3758,6 +3758,7 @@ const FloatTodo = (() => {
         <span class="ft-title">📌 내 할일 <span class="ft-count"></span></span>
         <span class="ft-head-btns">
           <button class="ft-btn" data-ft-pip title="화면 위에 띄우기(항상 위·다른 창에서도 보임)">🪟</button>
+          <button class="ft-btn" data-ft-win title="새 창으로 띄우기(작업표시줄에서 최소화 가능)">🗗</button>
           <button class="ft-btn" data-ft-min title="접기/펼치기">▁</button>
           <button class="ft-btn" data-ft-close title="닫기">✕</button>
         </span>
@@ -3772,6 +3773,7 @@ const FloatTodo = (() => {
       applyMin();
     };
     el.querySelector("[data-ft-pip]").onclick = openPiP;
+    el.querySelector("[data-ft-win]").onclick = openPopup;
     enableDrag(el.querySelector("[data-ft-drag]"));
     restorePos();
     applyMin();
@@ -3947,6 +3949,13 @@ const FloatTodo = (() => {
   }
 
   function openPopup() {
+    // 이미 떠 있으면 그 창으로 포커스만 이동
+    if (pipWin && !pipWin.closed) {
+      try {
+        pipWin.focus();
+        return;
+      } catch (e) {}
+    }
     const w = window.open("", "myTodoFloat", "width=300,height=420");
     if (!w) {
       UI.toast("팝업이 차단되었어요. 팝업 허용 후 다시 시도하세요", "warn");
