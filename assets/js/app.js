@@ -155,6 +155,7 @@ const HELP = {
       "  · 카드의 ▶ 버튼으로 '진행 중'으로, ✓ 버튼으로 '완료'로 상태를 바꿔요.",
       "  · 이미 진행 중이면 ✓ 버튼만 표시돼요.",
       "  · 완료 칸 맨 아래 '🗂️ 지난 완료한 일 ▼'으로 예전에 끝낸 업무도 다시 볼 수 있어요.",
+      "우측 상단 '📌 내 할일'을 누르면 내 할일 목록이 작은 창으로 떠서 어느 페이지에서나 따라다녀요. 드래그로 옮기고, 🪟 버튼으로 화면 위(다른 창에서도 보이게)에 띄울 수 있어요.",
     ],
   },
   goals: {
@@ -336,6 +337,7 @@ function renderHeader() {
       </div>
       <div class="header-right">
         ${userSelect}
+        <button class="btn ghost sm ${FloatTodo.isOn() ? "on" : ""}" data-act="float-todo-toggle" title="내 할일을 화면에 띄워 따라다니게 해요">📌 내 할일</button>
         <button class="btn ghost sm" id="addMemberQuick">+ 이름 등록</button>
         <button class="icon-btn" id="dataMenuBtn" title="데이터 백업/복원">⚙️</button>
       </div>
@@ -3407,6 +3409,9 @@ async function handleAction(act, el) {
       App.state.helpOpen = !App.state.helpOpen;
       render();
       return;
+    case "float-todo-toggle":
+      FloatTodo.toggle();
+      return;
     case "asst-toggle":
       App.state.assistantOpen = !App.state.assistantOpen;
       render();
@@ -3654,6 +3659,281 @@ async function handleAction(act, el) {
   }
 }
 
+/* ============ 내 할일 플로팅 위젯 (페이지/화면 따라다니기) ============ */
+const FloatTodo = (() => {
+  const LS = { on: "floatTodo.on", pos: "floatTodo.pos", min: "floatTodo.min" };
+  let el = null; // 본문 위젯 DOM
+  let pipWin = null; // Picture-in-Picture 창
+  let pipUnsub = null;
+
+  function isOn() {
+    return localStorage.getItem(LS.on) === "1";
+  }
+  function isMin() {
+    return localStorage.getItem(LS.min) === "1";
+  }
+
+  // 내 미완료 할일 (진행 중 → 할 일, 마감 임박 우선)
+  function myTasks() {
+    const me = curUser();
+    if (!me) return [];
+    return Store.list("tasks")
+      .filter((t) => t.assignee_id === me && t.status !== "done")
+      .sort(
+        (a, b) =>
+          ({ doing: 0, todo: 1 }[a.status] - { doing: 0, todo: 1 }[b.status]) ||
+          (a.due_date || "9999").localeCompare(b.due_date || "9999")
+      );
+  }
+
+  function listHTML() {
+    if (!curUser())
+      return `<div class="ft-empty">상단에서 본인 이름을 먼저 선택하세요.</div>`;
+    const list = myTasks();
+    if (!list.length)
+      return `<div class="ft-empty">🎉 처리할 내 할일이 없어요!</div>`;
+    const today = UI.todayInput();
+    return list
+      .map((t) => {
+        const overdue = t.due_date && t.due_date < today;
+        const next = t.status === "todo" ? "doing" : "done";
+        const icon = t.status === "todo" ? "▶" : "✓";
+        const tip = t.status === "todo" ? "진행 시작" : "완료 처리";
+        return `
+        <div class="ft-row">
+          <button class="ft-check status-${t.status}" data-act="task-move" data-id="${t.id}" data-to="${next}" title="${tip}">${icon}</button>
+          <span class="ft-row-title" title="${UI.esc(t.title)}">${UI.esc(t.title)}</span>
+          ${
+            t.due_date
+              ? `<span class="ft-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date).slice(5)}</span>`
+              : ""
+          }
+        </div>`;
+      })
+      .join("");
+  }
+
+  function countText() {
+    const list = myTasks();
+    const doing = list.filter((t) => t.status === "doing").length;
+    return `${list.length}건 · 진행 ${doing}`;
+  }
+
+  function ensure() {
+    if (el) return el;
+    el = document.createElement("div");
+    el.id = "floatTodo";
+    el.className = "float-todo";
+    el.innerHTML = `
+      <div class="ft-head" data-ft-drag>
+        <span class="ft-title">📌 내 할일 <span class="ft-count"></span></span>
+        <span class="ft-head-btns">
+          <button class="ft-btn" data-ft-pip title="화면 위에 띄우기(항상 위·다른 창에서도 보임)">🪟</button>
+          <button class="ft-btn" data-ft-min title="접기/펼치기">▁</button>
+          <button class="ft-btn" data-ft-close title="닫기">✕</button>
+        </span>
+      </div>
+      <div class="ft-body"></div>`;
+    document.body.appendChild(el);
+
+    // 헤더 버튼
+    el.querySelector("[data-ft-close]").onclick = () => setOn(false);
+    el.querySelector("[data-ft-min]").onclick = () => {
+      localStorage.setItem(LS.min, isMin() ? "0" : "1");
+      applyMin();
+    };
+    el.querySelector("[data-ft-pip]").onclick = openPiP;
+    enableDrag(el.querySelector("[data-ft-drag]"));
+    restorePos();
+    applyMin();
+    return el;
+  }
+
+  function applyMin() {
+    if (!el) return;
+    el.classList.toggle("min", isMin());
+  }
+
+  function restorePos() {
+    if (!el) return;
+    let pos = null;
+    try {
+      pos = JSON.parse(localStorage.getItem(LS.pos) || "null");
+    } catch (e) {}
+    const w = 270;
+    const left = pos ? pos.left : Math.max(12, window.innerWidth - w - 20);
+    const top = pos ? pos.top : 110;
+    el.style.left = clampX(left) + "px";
+    el.style.top = clampY(top) + "px";
+  }
+  function clampX(x) {
+    return Math.min(Math.max(8, x), window.innerWidth - 80);
+  }
+  function clampY(y) {
+    return Math.min(Math.max(8, y), window.innerHeight - 60);
+  }
+
+  function enableDrag(handle) {
+    let sx, sy, sl, st, dragging = false;
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".ft-btn")) return; // 버튼 클릭은 드래그 아님
+      dragging = true;
+      sx = e.clientX;
+      sy = e.clientY;
+      sl = parseInt(el.style.left) || 0;
+      st = parseInt(el.style.top) || 0;
+      handle.setPointerCapture(e.pointerId);
+      el.classList.add("dragging");
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      el.style.left = clampX(sl + e.clientX - sx) + "px";
+      el.style.top = clampY(st + e.clientY - sy) + "px";
+    });
+    const end = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove("dragging");
+      localStorage.setItem(
+        LS.pos,
+        JSON.stringify({ left: parseInt(el.style.left), top: parseInt(el.style.top) })
+      );
+    };
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+
+  // 본문/카운트 갱신 (본문 위젯 + PiP 동기화)
+  function update() {
+    if (isOn() && el) {
+      const body = el.querySelector(".ft-body");
+      const cnt = el.querySelector(".ft-count");
+      if (body) body.innerHTML = listHTML();
+      if (cnt) cnt.textContent = countText();
+    }
+    if (pipWin && !pipWin.closed) {
+      const pb = pipWin.document.querySelector(".ft-body");
+      const pc = pipWin.document.querySelector(".ft-count");
+      if (pb) pb.innerHTML = listHTML();
+      if (pc) pc.textContent = countText();
+    }
+  }
+
+  function setOn(on) {
+    localStorage.setItem(LS.on, on ? "1" : "0");
+    if (on) {
+      ensure();
+      el.style.display = "";
+      update();
+    } else if (el) {
+      el.style.display = "none";
+    }
+    // 헤더 버튼 활성 상태 반영
+    const btn = document.querySelector('[data-act="float-todo-toggle"]');
+    if (btn) btn.classList.toggle("on", on);
+  }
+
+  function toggle() {
+    setOn(!isOn());
+  }
+
+  function init() {
+    if (isOn()) setOn(true);
+    window.addEventListener("resize", () => {
+      if (el) restorePos();
+    });
+  }
+
+  // ---- 화면 위에 띄우기 (Document Picture-in-Picture) ----
+  function copyStylesTo(win) {
+    document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+      const nl = win.document.createElement("link");
+      nl.rel = "stylesheet";
+      nl.href = l.href; // 절대 URL
+      if (l.crossOrigin) nl.crossOrigin = l.crossOrigin;
+      win.document.head.appendChild(nl);
+    });
+    document.querySelectorAll("style").forEach((s) => {
+      win.document.head.appendChild(s.cloneNode(true));
+    });
+  }
+
+  async function openPiP() {
+    if (!window.documentPictureInPicture) {
+      UI.toast("이 브라우저는 화면 위 띄우기를 지원하지 않아 새 창으로 열어요", "warn");
+      return openPopup();
+    }
+    try {
+      pipWin = await window.documentPictureInPicture.requestWindow({
+        width: 280,
+        height: 380,
+      });
+      copyStylesTo(pipWin);
+      pipWin.document.body.className = "pip-body";
+      const wrap = pipWin.document.createElement("div");
+      wrap.className = "pip-todo";
+      wrap.innerHTML = `
+        <div class="ft-head static"><span class="ft-title">📌 내 할일 <span class="ft-count"></span></span></div>
+        <div class="ft-body"></div>`;
+      pipWin.document.body.appendChild(wrap);
+      // PiP 창 내부 클릭 위임 (완료/진행 버튼)
+      pipWin.document.body.addEventListener("click", (e) => {
+        const a = e.target.closest("[data-act]");
+        if (a) {
+          e.preventDefault();
+          handleAction(a.getAttribute("data-act"), a);
+        }
+      });
+      update();
+      pipUnsub = Store.subscribe(update);
+      pipWin.addEventListener("pagehide", () => {
+        if (pipUnsub) pipUnsub();
+        pipUnsub = null;
+        pipWin = null;
+      });
+      // 본문 위젯이 꺼져있어도 PiP만 띄울 수 있게: 켜진 상태로 표시
+      if (!isOn()) setOn(true);
+    } catch (e) {
+      UI.toast("화면 위 띄우기에 실패했어요. 새 창으로 열어요", "warn");
+      openPopup();
+    }
+  }
+
+  function openPopup() {
+    const w = window.open("", "myTodoFloat", "width=300,height=420");
+    if (!w) {
+      UI.toast("팝업이 차단되었어요. 팝업 허용 후 다시 시도하세요", "warn");
+      return;
+    }
+    w.document.title = "내 할일";
+    copyStylesTo(w);
+    w.document.body.className = "pip-body";
+    const wrap = w.document.createElement("div");
+    wrap.className = "pip-todo";
+    wrap.innerHTML = `
+      <div class="ft-head static"><span class="ft-title">📌 내 할일 <span class="ft-count"></span></span></div>
+      <div class="ft-body"></div>`;
+    w.document.body.appendChild(wrap);
+    w.document.body.addEventListener("click", (e) => {
+      const a = e.target.closest("[data-act]");
+      if (a) {
+        e.preventDefault();
+        handleAction(a.getAttribute("data-act"), a);
+      }
+    });
+    pipWin = w;
+    update();
+    pipUnsub = Store.subscribe(update);
+    w.addEventListener("beforeunload", () => {
+      if (pipUnsub) pipUnsub();
+      pipUnsub = null;
+      pipWin = null;
+    });
+  }
+
+  return { init, toggle, update, isOn };
+})();
+
 function bindGlobalEvents() {
   // 액션 버튼 위임
   document.body.addEventListener("click", (e) => {
@@ -3745,6 +4025,8 @@ function bindGlobalEvents() {
   Store.subscribe(() => {
     if (!document.querySelector(".modal-overlay")) render();
   });
+  // 플로팅 '내 할일' 위젯도 항상 최신으로 동기화
+  Store.subscribe(() => FloatTodo.update());
 }
 
 /* ============ 시작 ============ */
@@ -3752,4 +4034,5 @@ function bindGlobalEvents() {
   await Store.ready;
   bindGlobalEvents();
   render();
+  FloatTodo.init();
 })();
