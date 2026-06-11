@@ -2678,17 +2678,20 @@ function buildAutoReportDraft(detailIds) {
   };
 
   const doneLines = [];
-  // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0)
+  // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0) — 여기선 진행률(%) 표기 안 함
   doneToday.forEach((t) => doneLines.push(fmtDone(t, "(완료)")));
   doingTasks
     .filter((t) => (parseInt(t.progress) || 0) > 0)
-    .forEach((t) => doneLines.push(fmtDone(t, `(진행 ${parseInt(t.progress)}%)`)));
+    .forEach((t) => doneLines.push(fmtDone(t)));
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
-  // 내일 할 일: 대시보드의 '할 일(todo)' + 아직 안 끝난 진행 중 업무
+  // 내일 할 일: 대시보드의 '할 일(todo)' + 진행 중 업무(진행률 % 표시)
   const todoLines = [];
   todoTasks.forEach((t) => todoLines.push("- " + t.title));
-  doingTasks.forEach((t) => todoLines.push("- " + t.title));
+  doingTasks.forEach((t) => {
+    const p = parseInt(t.progress) || 0;
+    todoLines.push("- " + t.title + (p > 0 ? ` (진행 ${p}%)` : ""));
+  });
 
   return {
     member_id: me,
