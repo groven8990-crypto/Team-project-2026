@@ -837,7 +837,18 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 .pip-body { margin: 0; background: #f1f5f9; font-family: inherit; }
 .pip-todo { display: flex; flex-direction: column; height: 100vh; }
 .pip-todo .ft-body { flex: 1; background: #fff; }
-.pip-todo.min .ft-body { display: none; }
+.pip-todo.min .ft-body, .pip-todo.min .ft-add { display: none; }
+.ft-add { display: flex; gap: 6px; padding: 8px; background: #fff; border-bottom: 1px solid var(--line); }
+.ft-add-input {
+  flex: 1; border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px;
+  font-size: 13px; font-family: inherit; background: #fff; color: var(--ink); min-width: 0;
+}
+.ft-add-input:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
+.ft-add-btn {
+  border: 0; background: var(--brand); color: #fff; width: 32px; flex-shrink: 0;
+  border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1; font-family: inherit;
+}
+.ft-add-btn:hover { filter: brightness(1.07); }
 
 /* ===== 토스트 ===== */
 .toast {

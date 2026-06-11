@@ -3899,6 +3899,10 @@ const FloatTodo = (() => {
           <button class="ft-btn" data-ft-extmin title="접기/펼치기">▁</button>
         </span>
       </div>
+      <div class="ft-add">
+        <input class="ft-add-input" type="text" placeholder="할일 입력 후 Enter 또는 ＋" maxlength="200">
+        <button class="ft-add-btn" data-ft-add title="할일 추가">＋</button>
+      </div>
       <div class="ft-body"></div>`;
     win.document.body.appendChild(wrap);
     // 접기: 본문 숨기고 창 높이를 헤더만큼 줄임
@@ -3908,6 +3912,29 @@ const FloatTodo = (() => {
         const w = win.outerWidth || win.innerWidth || 280;
         win.resizeTo(w, collapsed ? 92 : fullHeight);
       } catch (e) {}
+    });
+    // 빠른 추가 (제목만으로 내 할일에 바로 등록)
+    const addInput = wrap.querySelector(".ft-add-input");
+    const doAdd = () => {
+      const title = addInput.value.trim();
+      if (!title) {
+        addInput.focus();
+        return;
+      }
+      if (!curUser()) {
+        UI.toast("상단에서 본인 이름을 먼저 선택하세요", "warn");
+        return;
+      }
+      Store.add("tasks", { title, assignee_id: curUser(), status: "todo" });
+      addInput.value = "";
+      addInput.focus();
+    };
+    wrap.querySelector("[data-ft-add]").addEventListener("click", doAdd);
+    addInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        doAdd();
+      }
     });
     // 완료/진행/펼치기 버튼 위임
     win.document.body.addEventListener("click", (e) => {
