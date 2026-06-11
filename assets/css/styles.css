@@ -837,6 +837,7 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 .pip-body { margin: 0; background: #f1f5f9; font-family: inherit; }
 .pip-todo { display: flex; flex-direction: column; height: 100vh; }
 .pip-todo .ft-body { flex: 1; background: #fff; }
+.pip-todo.min .ft-body { display: none; }
 
 /* ===== 토스트 ===== */
 .toast {

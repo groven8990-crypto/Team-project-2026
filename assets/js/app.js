@@ -3887,6 +3887,38 @@ const FloatTodo = (() => {
     });
   }
 
+  // PiP/팝업 창 내부 구성 (접기 버튼 + 클릭 위임)
+  function buildExternal(win, fullHeight) {
+    win.document.body.className = "pip-body";
+    const wrap = win.document.createElement("div");
+    wrap.className = "pip-todo";
+    wrap.innerHTML = `
+      <div class="ft-head static">
+        <span class="ft-title">📌 내 할일 <span class="ft-count"></span></span>
+        <span class="ft-head-btns">
+          <button class="ft-btn" data-ft-extmin title="접기/펼치기">▁</button>
+        </span>
+      </div>
+      <div class="ft-body"></div>`;
+    win.document.body.appendChild(wrap);
+    // 접기: 본문 숨기고 창 높이를 헤더만큼 줄임
+    wrap.querySelector("[data-ft-extmin]").addEventListener("click", () => {
+      const collapsed = wrap.classList.toggle("min");
+      try {
+        const w = win.outerWidth || win.innerWidth || 280;
+        win.resizeTo(w, collapsed ? 92 : fullHeight);
+      } catch (e) {}
+    });
+    // 완료/진행/펼치기 버튼 위임
+    win.document.body.addEventListener("click", (e) => {
+      const a = e.target.closest("[data-act]");
+      if (a) {
+        e.preventDefault();
+        handleAction(a.getAttribute("data-act"), a);
+      }
+    });
+  }
+
   async function openPiP() {
     if (!window.documentPictureInPicture) {
       UI.toast("이 브라우저는 화면 위 띄우기를 지원하지 않아 새 창으로 열어요", "warn");
@@ -3898,21 +3930,7 @@ const FloatTodo = (() => {
         height: 380,
       });
       copyStylesTo(pipWin);
-      pipWin.document.body.className = "pip-body";
-      const wrap = pipWin.document.createElement("div");
-      wrap.className = "pip-todo";
-      wrap.innerHTML = `
-        <div class="ft-head static"><span class="ft-title">📌 내 할일 <span class="ft-count"></span></span></div>
-        <div class="ft-body"></div>`;
-      pipWin.document.body.appendChild(wrap);
-      // PiP 창 내부 클릭 위임 (완료/진행 버튼)
-      pipWin.document.body.addEventListener("click", (e) => {
-        const a = e.target.closest("[data-act]");
-        if (a) {
-          e.preventDefault();
-          handleAction(a.getAttribute("data-act"), a);
-        }
-      });
+      buildExternal(pipWin, 380);
       update();
       pipUnsub = Store.subscribe(update);
       pipWin.addEventListener("pagehide", () => {
@@ -3936,20 +3954,7 @@ const FloatTodo = (() => {
     }
     w.document.title = "내 할일";
     copyStylesTo(w);
-    w.document.body.className = "pip-body";
-    const wrap = w.document.createElement("div");
-    wrap.className = "pip-todo";
-    wrap.innerHTML = `
-      <div class="ft-head static"><span class="ft-title">📌 내 할일 <span class="ft-count"></span></span></div>
-      <div class="ft-body"></div>`;
-    w.document.body.appendChild(wrap);
-    w.document.body.addEventListener("click", (e) => {
-      const a = e.target.closest("[data-act]");
-      if (a) {
-        e.preventDefault();
-        handleAction(a.getAttribute("data-act"), a);
-      }
-    });
+    buildExternal(w, 420);
     pipWin = w;
     update();
     pipUnsub = Store.subscribe(update);
