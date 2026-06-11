@@ -3936,8 +3936,8 @@ const FloatTodo = (() => {
         doAdd();
       }
     });
-    // 완료/진행/펼치기 버튼 위임
-    win.document.body.addEventListener("click", (e) => {
+    // 완료/진행/펼치기 버튼 위임 (wrap에만 부착 → 재빌드 시 누적/잔존 없음)
+    wrap.addEventListener("click", (e) => {
       const a = e.target.closest("[data-act]");
       if (a) {
         e.preventDefault();
@@ -3954,14 +3954,21 @@ const FloatTodo = (() => {
         return;
       } catch (e) {}
     }
-    const w = window.open("", "myTodoFloat", "width=300,height=420");
+    const w = window.open("", "myTodoFloat", "width=300,height=470");
     if (!w) {
       UI.toast("팝업이 차단되었어요. 팝업 허용 후 다시 시도하세요", "warn");
       return;
     }
-    w.document.title = "내 할일";
+    // 재사용된 창의 이전 내용을 완전히 초기화 (예전 UI/리스너 제거)
+    try {
+      w.document.open();
+      w.document.write(
+        '<!doctype html><html><head><meta charset="utf-8"><title>내 할일</title></head><body class="pip-body"></body></html>'
+      );
+      w.document.close();
+    } catch (e) {}
     copyStylesTo(w);
-    buildExternal(w, 420);
+    buildExternal(w, 470);
     pipWin = w;
     update();
     pipUnsub = Store.subscribe(update);
