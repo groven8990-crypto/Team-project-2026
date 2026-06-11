@@ -182,7 +182,8 @@ const HELP = {
   calendar: {
     title: "캘린더 사용법",
     items: [
-      "달력의 날짜 칸을 클릭하면 그 날짜가 자동으로 입력된 일정 추가 창이 열려요.",
+      "달력의 날짜 칸을 클릭하면 그 날의 일정을 잘림 없이 모아 볼 수 있는 창이 열려요. 거기서 바로 일정 추가·수정·삭제도 가능해요.",
+      "달력 위에는 '월별 일정 · 이번 주 일정'이 나란히, 그 아래에 '오늘의 일정'이 한 줄로 펼쳐져 한눈에 보여요.",
       "【여러 날 일정】 시작일과 종료일을 모두 입력하면 달력에서 날짜 범위로 표시돼요.",
       "【구분 설정】 '주별'로 등록하면 달력 위 주별 일정 영역에, '월별'로 등록하면 월별 일정 영역에 표시돼요.",
       "  · '주별+월별' 둘 다 체크하면 양쪽에 모두 나타나요.",
@@ -1439,6 +1440,16 @@ function renderCalendar() {
     )
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
+  // 오늘의 일정 (오늘 날짜가 기간에 포함되는 모든 일정)
+  const todayStr = UI.todayInput();
+  const todayEvents = events
+    .filter((e) => {
+      const s = e.date;
+      const en = e.end_date || e.date;
+      return s && todayStr >= s && todayStr <= en;
+    })
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
   const highlight = `
     <div class="cal-highlights">
       <div class="hl-box hl-month">
@@ -1457,6 +1468,14 @@ function renderCalendar() {
           weekly.length
             ? weekly.map((e) => highlightItem(e)).join("")
             : `<div class="empty-mini">이번 주 주별 일정이 없습니다</div>`
+        }
+      </div>
+      <div class="hl-box hl-today">
+        <h4>📍 오늘의 일정 <span class="hl-range">${UI.fmtDate(todayStr).slice(5)}</span></h4>
+        ${
+          todayEvents.length
+            ? todayEvents.map((e) => highlightItem(e)).join("")
+            : `<div class="empty-mini">오늘 등록된 일정이 없습니다</div>`
         }
       </div>
     </div>`;
@@ -1523,6 +1542,102 @@ function highlightItem(e) {
         <button class="btn xs ghost" data-act="event-edit" data-id="${e.id}">수정</button>
         <button class="btn xs danger" data-act="event-del" data-id="${e.id}">삭제</button>
       </span>
+    </div>`;
+}
+
+/* 특정 날짜의 일정 전체 보기 모달 (잘림 없이 모두 표시, 추가/수정/삭제 가능) */
+function openDayDetail(dateStr) {
+  if (!dateStr) return;
+  const WD = ["일", "월", "화", "수", "목", "금", "토"];
+  const dow = WD[new Date(dateStr).getDay()] || "";
+  const hol = holidayName(dateStr);
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay day-detail";
+  overlay.innerHTML = `
+    <div class="dd-box">
+      <div class="dd-head">
+        <div class="dd-title">
+          <strong>${UI.fmtDate(dateStr)} (${dow})</strong>
+          ${hol ? `<span class="dd-hol">${UI.esc(hol)}</span>` : ""}
+          <span class="dd-count muted"></span>
+        </div>
+        <div class="dd-head-actions">
+          <button class="btn primary sm" data-act="event-add-on" data-date="${dateStr}">+ 이 날짜에 일정 추가</button>
+          <button class="icon-btn" data-close title="닫기">✕</button>
+        </div>
+      </div>
+      <div class="dd-body"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const paint = () => {
+    const events = Store.list("events")
+      .filter((e) => {
+        const s = e.date;
+        const en = e.end_date || e.date;
+        return s && dateStr >= s && dateStr <= en;
+      })
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const cnt = overlay.querySelector(".dd-count");
+    if (cnt) cnt.textContent = `· 일정 ${events.length}건`;
+    const body = overlay.querySelector(".dd-body");
+    if (body)
+      body.innerHTML = events.length
+        ? events.map((e) => dayDetailItem(e)).join("")
+        : `<div class="empty-mini">이 날짜에 등록된 일정이 없습니다. '+ 이 날짜에 일정 추가'로 등록해보세요.</div>`;
+  };
+  paint();
+  const unsub = Store.subscribe(paint); // 추가/수정/삭제 시 목록 자동 갱신
+
+  const close = () => {
+    unsub();
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  document.addEventListener("keydown", onKey);
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) close();
+  });
+  overlay.querySelector("[data-close]").onclick = close;
+}
+
+function dayDetailItem(e) {
+  const scopes = eventScopes(e);
+  const tags = scopes
+    .map((s) =>
+      s === "month"
+        ? `<span class="dd-tag month">월별</span>`
+        : `<span class="dd-tag week">주별</span>`
+    )
+    .join("");
+  const range =
+    e.end_date && e.end_date !== e.date
+      ? `${UI.fmtDate(e.date)} ~ ${UI.fmtDate(e.end_date)}`
+      : UI.fmtDate(e.date);
+  return `
+    <div class="dd-item">
+      <div class="dd-item-top">
+        <span class="dd-dot ${scopeClass(e)}"></span>
+        <strong>${UI.esc(e.title)}</strong>
+        ${tags}
+      </div>
+      <div class="dd-item-meta">
+        <span>📅 ${range}</span>
+        ${e.member_id ? `<span>✍ ${UI.esc(UI.memberName(e.member_id))}</span>` : ""}
+      </div>
+      ${
+        Array.isArray(e.participants) && e.participants.length
+          ? `<div class="dd-parts">${participantChips(e.participants)}</div>`
+          : ""
+      }
+      ${e.note ? `<div class="dd-note">${UI.nl2br(e.note)}</div>` : ""}
+      <div class="dd-item-actions">
+        <button class="btn xs ghost" data-act="event-edit" data-id="${e.id}">수정</button>
+        <button class="btn xs danger" data-act="event-del" data-id="${e.id}">삭제</button>
+      </div>
     </div>`;
 }
 
@@ -1594,7 +1709,7 @@ function calendarGrid(year, month, events) {
     cells += `
       <div class="cal-cell ${ds === today ? "today" : ""} ${
       hol ? "holiday" : ""
-    }" data-act="event-add-on" data-date="${ds}">
+    }" data-act="day-view" data-date="${ds}" title="클릭하면 이 날짜의 일정 전체 보기">
         <div class="cal-daynum ${dayCls}">${d}</div>
         ${hol ? `<div class="cal-holiday" title="${UI.esc(hol)}">${UI.esc(hol)}</div>` : ""}
         ${evHtml}${more}
@@ -1606,7 +1721,7 @@ function calendarGrid(year, month, events) {
       <span><i class="dot scope-day"></i>일반</span>
       <span><i class="dot scope-week"></i>주별</span>
       <span><i class="dot scope-month"></i>월별</span>
-      <span class="muted">날짜 칸을 클릭하면 그 날짜로 일정 추가</span>
+      <span class="muted">날짜 칸을 클릭하면 그 날의 일정을 모아 볼 수 있어요</span>
     </div>`;
 }
 
@@ -3369,6 +3484,7 @@ async function handleAction(act, el) {
 
     // 캘린더
     case "event-add": return eventForm();
+    case "day-view": return openDayDetail(el.getAttribute("data-date"));
     case "event-add-on": return eventForm(null, el.getAttribute("data-date"));
     case "event-edit": return eventForm(find("events"));
     case "event-del":
