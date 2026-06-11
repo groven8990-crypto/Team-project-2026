@@ -155,7 +155,7 @@ const HELP = {
       "  · 카드의 ▶ 버튼으로 '진행 중'으로, ✓ 버튼으로 '완료'로 상태를 바꿔요.",
       "  · 이미 진행 중이면 ✓ 버튼만 표시돼요.",
       "  · 완료 칸 맨 아래 '🗂️ 지난 완료한 일 ▼'으로 예전에 끝낸 업무도 다시 볼 수 있어요.",
-      "우측 상단 '📌 내 할일'을 누르면 내 할일 목록이 작은 창으로 떠서 어느 페이지에서나 따라다녀요. 드래그로 옮기고, 🪟 버튼으로 화면 위(다른 창에서도 보이게)에 띄울 수 있어요.",
+      "우측 상단 '📌 내 할일'을 누르면 내 할일 목록이 작은 창으로 떠서 어느 페이지에서나 따라다녀요. 드래그로 옮기고, 🗗 버튼으로 새 창에 띄우면 작업표시줄에서 최소화했다가 다시 띄울 수 있어요.",
     ],
   },
   goals: {
@@ -3757,7 +3757,6 @@ const FloatTodo = (() => {
       <div class="ft-head" data-ft-drag>
         <span class="ft-title">📌 내 할일 <span class="ft-count"></span></span>
         <span class="ft-head-btns">
-          <button class="ft-btn" data-ft-pip title="화면 위에 띄우기(항상 위·다른 창에서도 보임)">🪟</button>
           <button class="ft-btn" data-ft-win title="새 창으로 띄우기(작업표시줄에서 최소화 가능)">🗗</button>
           <button class="ft-btn" data-ft-min title="접기/펼치기">▁</button>
           <button class="ft-btn" data-ft-close title="닫기">✕</button>
@@ -3772,7 +3771,6 @@ const FloatTodo = (() => {
       localStorage.setItem(LS.min, isMin() ? "0" : "1");
       applyMin();
     };
-    el.querySelector("[data-ft-pip]").onclick = openPiP;
     el.querySelector("[data-ft-win]").onclick = openPopup;
     enableDrag(el.querySelector("[data-ft-drag]"));
     restorePos();
@@ -3875,7 +3873,7 @@ const FloatTodo = (() => {
     });
   }
 
-  // ---- 화면 위에 띄우기 (Document Picture-in-Picture) ----
+  // ---- 새 창으로 띄우기 (작업표시줄에서 최소화 가능) ----
   function copyStylesTo(win) {
     document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
       const nl = win.document.createElement("link");
@@ -3919,33 +3917,6 @@ const FloatTodo = (() => {
         handleAction(a.getAttribute("data-act"), a);
       }
     });
-  }
-
-  async function openPiP() {
-    if (!window.documentPictureInPicture) {
-      UI.toast("이 브라우저는 화면 위 띄우기를 지원하지 않아 새 창으로 열어요", "warn");
-      return openPopup();
-    }
-    try {
-      pipWin = await window.documentPictureInPicture.requestWindow({
-        width: 280,
-        height: 380,
-      });
-      copyStylesTo(pipWin);
-      buildExternal(pipWin, 380);
-      update();
-      pipUnsub = Store.subscribe(update);
-      pipWin.addEventListener("pagehide", () => {
-        if (pipUnsub) pipUnsub();
-        pipUnsub = null;
-        pipWin = null;
-      });
-      // 본문 위젯이 꺼져있어도 PiP만 띄울 수 있게: 켜진 상태로 표시
-      if (!isOn()) setOn(true);
-    } catch (e) {
-      UI.toast("화면 위 띄우기에 실패했어요. 새 창으로 열어요", "warn");
-      openPopup();
-    }
   }
 
   function openPopup() {
