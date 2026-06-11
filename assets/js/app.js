@@ -236,6 +236,7 @@ const HELP = {
     items: [
       "【일일 보고】 오늘 한 일·내일 할 일·특이사항을 작성해요.",
       "  · '⚡ 자동생성'을 누르면 오늘 진행 중·완료된 업무가 진행률과 함께 자동으로 채워져요.",
+      "  · 상세내용이 있는 업무가 있으면, 자동생성 시 '오늘 한 일'에 상세까지 넣을 업무를 골라서 그것만 상세가 들어가요(내일 할 일은 항상 제목만).",
       "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
       "【주간 계획】 이번 주에 할 계획을 미리 작성하는 보고서예요 (지난 주 실적 정리가 아니에요!).",
       "  · '⚡ 자동생성'을 누르면 이번 주 등록된 업무·일정이 초안으로 채워져요.",
@@ -2637,7 +2638,9 @@ function openCombinedReport(date) {
   openSheetModal(combinedSheetHTML(date), text, `일일보고_취합_${date}`);
 }
 
-function buildAutoReportDraft() {
+/* detailIds: '오늘 한 일'에서 상세내용까지 넣을 업무 id 목록 (없으면 제목만) */
+function buildAutoReportDraft(detailIds) {
+  const detailSet = new Set(detailIds || []);
   const today = UI.todayInput();
   const me = curUser();
   const mineTasks = Store.list("tasks").filter((t) => !me || t.assignee_id === me);
@@ -2652,11 +2655,11 @@ function buildAutoReportDraft() {
   const todoTasks = mineTasks.filter((t) => t.status === "todo");
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
-  // 업무 한 줄 만들기: 제목(+상태) / 상세내용 있으면 아래에 ↳ 로 덧붙임
-  const fmtTask = (t, suffix) => {
+  // 오늘 한 일 줄: 선택된 업무만 상세내용(↳)을 제목 아래 덧붙임
+  const fmtDone = (t, suffix) => {
     const head = `- ${t.title}${suffix ? " " + suffix : ""}`;
     const detail = (t.detail || "").trim();
-    if (!detail) return head;
+    if (!detailSet.has(t.id) || !detail) return head;
     const body = detail
       .split(/\r?\n/)
       .map((s) => "  ↳ " + s.trim())
@@ -2666,16 +2669,16 @@ function buildAutoReportDraft() {
 
   const doneLines = [];
   // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0)
-  doneToday.forEach((t) => doneLines.push(fmtTask(t, "(완료)")));
+  doneToday.forEach((t) => doneLines.push(fmtDone(t, "(완료)")));
   doingTasks
     .filter((t) => (parseInt(t.progress) || 0) > 0)
-    .forEach((t) => doneLines.push(fmtTask(t, `(진행 ${parseInt(t.progress)}%)`)));
+    .forEach((t) => doneLines.push(fmtDone(t, `(진행 ${parseInt(t.progress)}%)`)));
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
   // 내일 할 일: 대시보드의 '할 일(todo)' + 아직 안 끝난 진행 중 업무
   const todoLines = [];
-  todoTasks.forEach((t) => todoLines.push(fmtTask(t)));
-  doingTasks.forEach((t) => todoLines.push(fmtTask(t)));
+  todoTasks.forEach((t) => todoLines.push("- " + t.title));
+  doingTasks.forEach((t) => todoLines.push("- " + t.title));
 
   return {
     member_id: me,
@@ -2684,6 +2687,40 @@ function buildAutoReportDraft() {
     todo: todoLines.join("\n"),
     note: "",
   };
+}
+
+/* 자동생성: 상세내용을 넣을 업무를 먼저 고른 뒤 일일보고 초안 생성 */
+async function startAutoReport() {
+  const today = UI.todayInput();
+  const me = curUser();
+  const mine = Store.list("tasks").filter((t) => !me || t.assignee_id === me);
+  // '오늘 한 일' 후보 중 상세내용이 있는 업무만 선택지로 노출
+  const candidates = mine.filter((t) => {
+    const isDone =
+      t.status === "done" &&
+      (t.updated_at || t.created_at || "").slice(0, 10) === today;
+    const isProg = t.status === "doing" && (parseInt(t.progress) || 0) > 0;
+    return (isDone || isProg) && (t.detail || "").trim();
+  });
+  // 상세 있는 업무가 없으면 바로 제목만으로 생성
+  if (!candidates.length) {
+    return reportForm(null, buildAutoReportDraft());
+  }
+  const res = await UI.formModal({
+    title: "상세내용 포함 선택",
+    submitText: "보고서 만들기",
+    fields: [
+      {
+        name: "ids",
+        label: "‘오늘 한 일’에 상세내용까지 넣을 업무를 고르세요 (선택 안 하면 제목만 들어가요)",
+        type: "checks",
+        full: true,
+        options: candidates.map((t) => ({ value: t.id, label: t.title })),
+      },
+    ],
+  });
+  if (!res) return; // 취소
+  reportForm(null, buildAutoReportDraft(res.ids));
 }
 
 function fmtYMD(x) {
@@ -3629,7 +3666,7 @@ async function handleAction(act, el) {
     case "report-combine":
       return openCombinedReport(el.getAttribute("data-date"));
     case "report-add": return reportForm();
-    case "report-auto": return reportForm(null, buildAutoReportDraft());
+    case "report-auto": return startAutoReport();
     case "wreport-add": return planReportForm("weekly");
     case "wreport-auto": return planReportForm("weekly", null, buildPlanDraft("weekly"));
     case "wreport-edit": return planReportForm("weekly", find("reports"));
