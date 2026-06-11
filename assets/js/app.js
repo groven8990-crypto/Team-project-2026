@@ -3412,6 +3412,9 @@ async function handleAction(act, el) {
     case "float-todo-toggle":
       FloatTodo.toggle();
       return;
+    case "ft-expand":
+      FloatTodo.toggleExpand(el.getAttribute("data-id"));
+      return;
     case "asst-toggle":
       App.state.assistantOpen = !App.state.assistantOpen;
       render();
@@ -3665,6 +3668,7 @@ const FloatTodo = (() => {
   let el = null; // 본문 위젯 DOM
   let pipWin = null; // Picture-in-Picture 창
   let pipUnsub = null;
+  const expanded = new Set(); // 세부사항 펼친 할일 id
 
   function isOn() {
     return localStorage.getItem(LS.on) === "1";
@@ -3699,18 +3703,43 @@ const FloatTodo = (() => {
         const next = t.status === "todo" ? "doing" : "done";
         const icon = t.status === "todo" ? "▶" : "✓";
         const tip = t.status === "todo" ? "진행 시작" : "완료 처리";
+        const exp = expanded.has(t.id);
+        const detail = exp
+          ? `
+          <div class="ft-detail">
+            ${progressBar(t.status === "done" ? 100 : parseInt(t.progress) || 0)}
+            ${t.due_date ? `<div class="ft-d-line">📅 마감 ${UI.fmtDate(t.due_date)}</div>` : ""}
+            <div class="ft-d-content">${
+              t.detail ? UI.nl2br(t.detail) : '<span class="muted">상세 내용이 없습니다.</span>'
+            }</div>
+            <div class="ft-d-actions">
+              <button class="btn xs ghost" data-act="task-edit" data-id="${t.id}">✎ 수정</button>
+            </div>
+          </div>`
+          : "";
         return `
-        <div class="ft-row">
-          <button class="ft-check status-${t.status}" data-act="task-move" data-id="${t.id}" data-to="${next}" title="${tip}">${icon}</button>
-          <span class="ft-row-title" title="${UI.esc(t.title)}">${UI.esc(t.title)}</span>
-          ${
-            t.due_date
-              ? `<span class="ft-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date).slice(5)}</span>`
-              : ""
-          }
+        <div class="ft-item ${exp ? "exp" : ""}">
+          <div class="ft-row">
+            <button class="ft-check status-${t.status}" data-act="task-move" data-id="${t.id}" data-to="${next}" title="${tip}">${icon}</button>
+            <span class="ft-row-title" data-act="ft-expand" data-id="${t.id}" title="클릭하면 세부사항 펼치기">${UI.esc(t.title)}</span>
+            ${
+              t.due_date
+                ? `<span class="ft-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date).slice(5)}</span>`
+                : ""
+            }
+            <span class="ft-caret" data-act="ft-expand" data-id="${t.id}">${exp ? "▾" : "▸"}</span>
+          </div>
+          ${detail}
         </div>`;
       })
       .join("");
+  }
+
+  function toggleExpand(id) {
+    if (!id) return;
+    if (expanded.has(id)) expanded.delete(id);
+    else expanded.add(id);
+    update();
   }
 
   function countText() {
@@ -3931,7 +3960,7 @@ const FloatTodo = (() => {
     });
   }
 
-  return { init, toggle, update, isOn };
+  return { init, toggle, update, isOn, toggleExpand };
 })();
 
 function bindGlobalEvents() {

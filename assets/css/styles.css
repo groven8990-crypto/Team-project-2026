@@ -809,9 +809,9 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 .ft-btn:hover { background: rgba(255,255,255,.34); }
 .ft-body { padding: 8px; overflow-y: auto; }
 .float-todo.min .ft-body { display: none; }
+.ft-item + .ft-item { border-top: 1px solid var(--line); }
 .ft-row { display: flex; align-items: center; gap: 8px; padding: 7px 6px; border-radius: 8px; }
 .ft-row:hover { background: var(--panel-2); }
-.ft-row + .ft-row { border-top: 1px solid var(--line); }
 .ft-check {
   border: 1px solid var(--line-2); background: #fff; width: 22px; height: 22px; flex-shrink: 0;
   border-radius: 6px; cursor: pointer; font-size: 11px; line-height: 1; display: grid; place-items: center;
@@ -820,9 +820,17 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 .ft-check:hover { transform: scale(1.12); }
 .ft-check.status-doing { border-color: #3b82f6; color: #3b82f6; }
 .ft-check.status-todo { border-color: #94a3b8; color: #64748b; }
-.ft-row-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-row-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.ft-row-title:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
 .ft-due { font-size: 11px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
 .ft-due.overdue { color: var(--danger); }
+.ft-caret { font-size: 10px; color: var(--muted); cursor: pointer; flex-shrink: 0; width: 14px; text-align: center; }
+.ft-item.exp { background: var(--panel-2); border-radius: 8px; }
+.ft-item.exp .ft-row:hover { background: transparent; }
+.ft-detail { padding: 2px 10px 10px 34px; display: flex; flex-direction: column; gap: 8px; }
+.ft-d-line { font-size: 12px; color: var(--muted); }
+.ft-d-content { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); white-space: pre-wrap; word-break: break-word; }
+.ft-d-actions { display: flex; justify-content: flex-end; }
 .ft-empty { padding: 18px 10px; text-align: center; font-size: 12.5px; color: var(--muted); }
 
 /* Picture-in-Picture / 팝업 창 본문 */
