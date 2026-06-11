@@ -651,6 +651,7 @@ input[type="number"].pt-prog:focus { outline: none; border-color: var(--brand); 
 .leave-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; font-size: 13px; color: #0f766e; font-weight: 700; }
 .leave-chip { background: #fff; border: 1px solid #99f6e4; border-radius: 999px; padding: 3px 10px; font-weight: 600; color: #0f766e; }
 .leave-chip b { color: #0e7490; }
+.report-card.leave-card { background: #f0fdfa; border-color: #99f6e4; }
 .cal-ev.is-leave { background: #ccfbf1 !important; color: #0f766e !important; }
 @media (max-width: 600px) { .combined-grid { grid-template-columns: 1fr; } }
 

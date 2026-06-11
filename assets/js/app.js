@@ -1697,7 +1697,9 @@ function leaveLabelFor(memberId, dateStr) {
       const en = e.end_date || e.date;
       if (!s || dateStr < s || dateStr > en) return false;
       const parts = Array.isArray(e.participants) ? e.participants : [];
-      return parts.includes(memberId) || e.member_id === memberId;
+      // 휴무 대상자는 '참여자' 기준. 참여자가 비었을 때만 작성자를 대상으로 봄
+      // (작성자는 단지 등록한 사람일 수 있으므로 참여자가 있으면 작성자는 제외)
+      return parts.length ? parts.includes(memberId) : e.member_id === memberId;
     })
     .map((e) => eventLeave(e));
   return [...new Set(labels)].join("·");
@@ -2533,6 +2535,19 @@ function dailyCard(r) {
     </div>`;
 }
 
+/* 휴무(연차 등)인 사람의 자동 보고 카드 — 보고서 작성 없이 캘린더 연차로 자동 표시 */
+function leaveCard(m, lv, date) {
+  return `
+    <div class="card report-card leave-card">
+      <div class="card-top">
+        <strong>${UI.fmtDate(date)} 일일 보고</strong>
+        ${UI.memberChip(m.id)}
+      </div>
+      <div class="report-row"><b>오늘 한 일</b><div>🌴 ${UI.esc(lv)}</div></div>
+      <div class="card-meta muted">캘린더 연차 등록으로 자동 표시돼요</div>
+    </div>`;
+}
+
 function planCard(r) {
   const meta = reportMeta(r);
   const editAct = r.kind === "monthly" ? "mreport-edit" : "wreport-edit";
@@ -2564,30 +2579,32 @@ function renderReportsCollect() {
   const dayReports = Store.list("reports")
     .filter((r) => isDailyReport(r) && r.date === date)
     .sort((a, b) => memberOrder(a.member_id) - memberOrder(b.member_id));
+  const reportedIds = new Set(dayReports.map((r) => r.member_id));
 
-  const cards = dayReports.length
-    ? dayReports.map((r) => dailyCard(r)).join("")
+  // 그 날 휴무(연차 등)인데 보고서를 안 쓴 사람 → 자동 '연차' 카드 생성
+  const leaveMembers = Store.list("members")
+    .map((m) => ({ m, lv: leaveLabelFor(m.id, date) }))
+    .filter((x) => x.lv && !reportedIds.has(x.m.id))
+    .sort((a, b) => memberOrder(a.m.id) - memberOrder(b.m.id));
+
+  const total = dayReports.length + leaveMembers.length;
+  const cards = total
+    ? dayReports.map((r) => dailyCard(r)).join("") +
+      leaveMembers.map((x) => leaveCard(x.m, x.lv, date)).join("")
     : `<div class="empty">${UI.fmtDate(date)}에 작성된 일일보고가 없습니다.</div>`;
 
-  // 그 날 휴무/부재자 모아 표시
-  const leaveMembers = Store.list("members")
-    .map((m) => ({ name: m.name, lv: leaveLabelFor(m.id, date) }))
-    .filter((x) => x.lv);
-  const leaveBar = leaveMembers.length
-    ? `<div class="leave-bar">🌴 ${leaveMembers
-        .map((x) => `<span class="leave-chip">${UI.esc(x.name)} <b>${UI.esc(x.lv)}</b></span>`)
-        .join("")}</div>`
+  const leaveNote = leaveMembers.length
+    ? ` <span class="muted" style="font-weight:600">(🌴 연차 ${leaveMembers.length}명 자동 포함)</span>`
     : "";
 
   return `
     ${reportCollectCalendar()}
     <div class="collect-head">
-      <h3>📅 ${UI.fmtDate(date)} · 일일보고 ${dayReports.length}건</h3>
+      <h3>📅 ${UI.fmtDate(date)} · 일일보고 ${total}건${leaveNote}</h3>
       <button class="btn primary" data-act="report-combine" data-date="${date}" ${
-    dayReports.length ? "" : "disabled"
-  }>📄 취합 제출 양식 (${dayReports.length}명)</button>
+    total ? "" : "disabled"
+  }>📄 취합 제출 양식 (${total}명)</button>
     </div>
-    ${leaveBar}
     <div class="list">${cards}</div>`;
 }
 
@@ -2700,15 +2717,18 @@ function combinedSheetHTML(date) {
 function openCombinedReport(date) {
   const members = Store.list("members");
   const reps = Store.list("reports").filter((r) => isDailyReport(r) && r.date === date);
-  if (!reps.length) return;
+  const hasLeave = members.some((m) => leaveLabelFor(m.id, date));
+  if (!reps.length && !hasLeave) return;
   const byMember = {};
   reps.forEach((r) => (byMember[r.member_id] = r));
   const text = members
-    .map((m) =>
-      byMember[m.id]
-        ? reportToText(byMember[m.id])
-        : `[${UI.memberName(m.id)}] 미작성`
-    )
+    .map((m) => {
+      if (byMember[m.id]) return reportToText(byMember[m.id]);
+      const lv = leaveLabelFor(m.id, date);
+      return lv
+        ? `[${UI.memberName(m.id)}] ${lv}`
+        : `[${UI.memberName(m.id)}] 미작성`;
+    })
     .join("\n\n────────────\n\n");
   openSheetModal(combinedSheetHTML(date), text, `일일보고_취합_${date}`);
 }
