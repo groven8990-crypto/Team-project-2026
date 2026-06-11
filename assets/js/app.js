@@ -280,7 +280,7 @@ const App = {
     docSelectedId: null, // 선택한 업무 문서
     docSearch: "", // 문서 검색어
     helpOpen: true, // 페이지 하단 사용법 표시
-    reportTab: "daily", // 보고서 보기: daily | weekly | collect
+    reportTab: "collect", // 보고서 보기: collect | weekly | monthly
     minutesSearch: "", // 회의록 검색어
     reportSearch: "", // 보고서 검색어
     doneExpanded: {}, // 사람별 보기: 완료 목록 펼침 상태 (memberId→bool)
@@ -2392,18 +2392,23 @@ function renderReports() {
   const tab = App.state.reportTab;
   const toggle = `
     <div class="view-toggle">
-      <button class="vt ${tab === "daily" ? "active" : ""}" data-act="report-tab" data-tab="daily">📈 일일</button>
+      <button class="vt ${tab === "collect" ? "active" : ""}" data-act="report-tab" data-tab="collect">📅 일일 보고 (날짜별 취합)</button>
       <button class="vt ${tab === "weekly" ? "active" : ""}" data-act="report-tab" data-tab="weekly">🗓️ 주간 계획</button>
       <button class="vt ${tab === "monthly" ? "active" : ""}" data-act="report-tab" data-tab="monthly">📆 월간 계획</button>
-      <button class="vt ${tab === "collect" ? "active" : ""}" data-act="report-tab" data-tab="collect">📅 날짜별 취합</button>
     </div>`;
 
-  // 날짜별 취합 보기
+  // 일일 보고 (날짜별 취합) - 기본 탭
   if (tab === "collect") {
     return `
       <section class="view">
-        <div class="view-head"><h2>날짜별 취합 보고</h2></div>
-        <p class="muted">날짜를 클릭하면 그날 팀원들이 작성한 일일보고를 모아 보고, 한 장의 PNG 이미지로 저장할 수 있어요.</p>
+        <div class="view-head">
+          <h2>일일 보고 (날짜별 취합)</h2>
+          <div class="head-btns">
+            <button class="btn ghost" data-act="report-auto">⚡ 오늘 활동으로 자동생성</button>
+            <button class="btn primary" data-act="report-add">+ 보고서 작성</button>
+          </div>
+        </div>
+        <p class="muted">'자동생성'은 오늘 완료/진행한 업무로 초안을 만들어요. 달력에서 날짜를 클릭하면 그날 팀원들의 일일보고를 모아 보고, 한 장의 PNG로 저장할 수 있어요.</p>
         ${toggle}
         ${renderReportsCollect()}
       </section>`;
