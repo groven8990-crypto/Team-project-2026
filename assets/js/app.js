@@ -1490,7 +1490,10 @@ function renderCalendar() {
     <section class="view">
       <div class="view-head">
         <h2>캘린더</h2>
-        <button class="btn primary" data-act="event-add">+ 일정 추가</button>
+        <div class="head-btns">
+          <button class="btn ghost" data-act="leave-add">🌴 연차 추가</button>
+          <button class="btn primary" data-act="event-add">+ 일정 추가</button>
+        </div>
       </div>
       ${highlight}
       <div class="cal-toolbar">
@@ -1568,7 +1571,8 @@ function openDayDetail(dateStr) {
           <span class="dd-count muted"></span>
         </div>
         <div class="dd-head-actions">
-          <button class="btn primary sm" data-act="event-add-on" data-date="${dateStr}">+ 이 날짜에 일정 추가</button>
+          <button class="btn ghost sm" data-act="leave-add-on" data-date="${dateStr}">🌴 연차 추가</button>
+          <button class="btn primary sm" data-act="event-add-on" data-date="${dateStr}">+ 일정 추가</button>
           <button class="icon-btn" data-close title="닫기">✕</button>
         </div>
       </div>
@@ -1748,16 +1752,19 @@ function calendarGrid(year, month, events) {
     </div>`;
 }
 
-async function eventForm(existing, presetDate) {
+async function eventForm(existing, presetDate, isLeave) {
   const values = existing
     ? { ...existing, scopes: eventScopes(existing) }
     : {
         member_id: curUser(),
         date: presetDate || UI.todayInput(),
         scopes: [],
+        // 연차 추가로 열었으면 구분=연차, 대상자=본인 기본 세팅
+        leave_type: isLeave ? "연차" : "",
+        participants: isLeave && curUser() ? [curUser()] : undefined,
       };
   const res = await UI.formModal({
-    title: existing ? "일정 수정" : "일정 추가",
+    title: existing ? "일정 수정" : isLeave ? "연차/휴무 추가" : "일정 추가",
     submitText: existing ? "수정" : "추가",
     values,
     fields: [
@@ -3616,8 +3623,10 @@ async function handleAction(act, el) {
 
     // 캘린더
     case "event-add": return eventForm();
+    case "leave-add": return eventForm(null, null, true);
     case "day-view": return openDayDetail(el.getAttribute("data-date"));
     case "event-add-on": return eventForm(null, el.getAttribute("data-date"));
+    case "leave-add-on": return eventForm(null, el.getAttribute("data-date"), true);
     case "event-edit": return eventForm(find("events"));
     case "event-del":
       if (await UI.confirmBox("이 일정을 삭제할까요?")) await Store.remove("events", id);
