@@ -2652,18 +2652,30 @@ function buildAutoReportDraft() {
   const todoTasks = mineTasks.filter((t) => t.status === "todo");
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
+  // 업무 한 줄 만들기: 제목(+상태) / 상세내용 있으면 아래에 ↳ 로 덧붙임
+  const fmtTask = (t, suffix) => {
+    const head = `- ${t.title}${suffix ? " " + suffix : ""}`;
+    const detail = (t.detail || "").trim();
+    if (!detail) return head;
+    const body = detail
+      .split(/\r?\n/)
+      .map((s) => "  ↳ " + s.trim())
+      .join("\n");
+    return head + "\n" + body;
+  };
+
   const doneLines = [];
   // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0)
-  doneToday.forEach((t) => doneLines.push(`- ${t.title} (완료)`));
+  doneToday.forEach((t) => doneLines.push(fmtTask(t, "(완료)")));
   doingTasks
     .filter((t) => (parseInt(t.progress) || 0) > 0)
-    .forEach((t) => doneLines.push(`- ${t.title} (진행 ${parseInt(t.progress)}%)`));
+    .forEach((t) => doneLines.push(fmtTask(t, `(진행 ${parseInt(t.progress)}%)`)));
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
   // 내일 할 일: 대시보드의 '할 일(todo)' + 아직 안 끝난 진행 중 업무
   const todoLines = [];
-  todoTasks.forEach((t) => todoLines.push("- " + t.title));
-  doingTasks.forEach((t) => todoLines.push("- " + t.title));
+  todoTasks.forEach((t) => todoLines.push(fmtTask(t)));
+  doingTasks.forEach((t) => todoLines.push(fmtTask(t)));
 
   return {
     member_id: me,
