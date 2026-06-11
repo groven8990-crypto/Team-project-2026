@@ -26,6 +26,8 @@ const GOAL_STATUS = [
   { key: "hold", label: "보류", color: "#f59e0b" },
 ];
 const GRADES = ["미평가", "S", "A", "B", "C"];
+/* 휴무/부재 구분 (캘린더 일정에 설정 → 일일보고 자동 기입) */
+const LEAVE_TYPES = ["연차", "오전반차", "오후반차", "병가", "외근", "교육", "출장"];
 
 /* 대한민국 공휴일 (대체공휴일·임시공휴일 포함). 음력 기반 날짜는 연도별로 직접 기재 */
 const HOLIDAYS = {
@@ -193,6 +195,7 @@ const HELP = {
       "  · 주별 일정 카드에는 참여자의 성(姓)이 색상 원으로 표시돼요.",
       "  · 참여자가 많으면 '+N명' 형식으로 줄여서 보여요.",
       "토요일은 파란색, 일요일·공휴일은 빨간색으로 표시돼요. 대한민국 공휴일은 날짜 칸에 이름이 함께 나와요.",
+      "【연차·휴무】 일정 추가 시 '휴무/부재 구분'에서 연차·반차·병가·외근 등을 고르고 대상자를 '참여자'에 넣으면, 그 날 일일보고 자동생성 시 '오늘 한 일'에 [연차]처럼 자동으로 들어가고 날짜별 취합에도 표시돼요.",
       "‹ › 화살표로 한 달씩, « » 화살표로 한 해씩 이동할 수 있어요. '오늘'을 누르면 이번 달로 돌아와요.",
     ],
   },
@@ -1624,7 +1627,8 @@ function dayDetailItem(e) {
     <div class="dd-item">
       <div class="dd-item-top">
         <span class="dd-dot ${scopeClass(e)}"></span>
-        <strong>${UI.esc(e.title)}</strong>
+        <strong>${e.leave_type ? "🌴 " : ""}${UI.esc(e.title)}</strong>
+        ${e.leave_type ? `<span class="dd-tag leave">${UI.esc(e.leave_type)}</span>` : ""}
         ${tags}
       </div>
       <div class="dd-item-meta">
@@ -1664,6 +1668,22 @@ function scopeClass(e) {
   return s.includes("month") ? "scope-month" : s.includes("week") ? "scope-week" : "scope-day";
 }
 
+/* 특정 멤버가 그 날짜에 등록된 휴무/부재 구분명 반환 (없으면 "") */
+function leaveLabelFor(memberId, dateStr) {
+  if (!memberId || !dateStr) return "";
+  const labels = Store.list("events")
+    .filter((e) => {
+      if (!e.leave_type) return false;
+      const s = e.date;
+      const en = e.end_date || e.date;
+      if (!s || dateStr < s || dateStr > en) return false;
+      const parts = Array.isArray(e.participants) ? e.participants : [];
+      return parts.includes(memberId) || e.member_id === memberId;
+    })
+    .map((e) => e.leave_type);
+  return [...new Set(labels)].join("·");
+}
+
 function calendarGrid(year, month, events) {
   const first = new Date(year, month, 1);
   const startDay = first.getDay();
@@ -1694,9 +1714,9 @@ function calendarGrid(year, month, events) {
       .map(
         (e) =>
           `<div class="cal-ev-wrap">
-             <div class="cal-ev ${scopeClass(e)}" data-act="event-edit" data-id="${
+             <div class="cal-ev ${scopeClass(e)} ${e.leave_type ? "is-leave" : ""}" data-act="event-edit" data-id="${
             e.id
-          }" title="${UI.esc(e.title)}">${UI.esc(e.title)}</div>
+          }" title="${UI.esc(e.title)}">${e.leave_type ? "🌴 " : ""}${UI.esc(e.title)}</div>
              ${
                Array.isArray(e.participants) && e.participants.length
                  ? `<div class="cal-ev-dots">${memberDots(e.participants)}</div>`
@@ -1741,9 +1761,18 @@ async function eventForm(existing, presetDate) {
     submitText: existing ? "수정" : "추가",
     values,
     fields: [
-      { name: "title", label: "일정 제목", type: "text", required: true, full: true },
+      { name: "title", label: "일정 제목 (연차 등은 비워두면 구분명으로 채워짐)", type: "text", full: true },
       { name: "date", label: "시작 날짜", type: "date", required: true },
       { name: "end_date", label: "종료 날짜 (여러 날이면)", type: "date" },
+      {
+        name: "leave_type",
+        label: "휴무/부재 구분 (연차·반차 등 / 일반 일정이면 비움)",
+        type: "select",
+        options: [
+          { value: "", label: "— 일반 일정 —" },
+          ...LEAVE_TYPES.map((x) => ({ value: x, label: x })),
+        ],
+      },
       {
         name: "scopes",
         label: "상단 강조 (둘 다 선택 가능)",
@@ -1762,7 +1791,7 @@ async function eventForm(existing, presetDate) {
       },
       {
         name: "participants",
-        label: "참여자 (이름 검색해서 추가)",
+        label: "참여자 / 휴무 대상자 (이름 검색해서 추가)",
         type: "memsearch",
         full: true,
         options: UI.memberOptions(false),
@@ -1775,6 +1804,8 @@ async function eventForm(existing, presetDate) {
   const sc = Array.isArray(res.scopes) ? res.scopes : [];
   res.scope = sc.length ? sc.join(",") : "day";
   delete res.scopes;
+  // 제목 비었으면 휴무 구분명(또는 '일정')으로 채움
+  if (!res.title || !res.title.trim()) res.title = res.leave_type || "일정";
   if (existing) {
     await Store.update("events", existing.id, res);
     UI.toast("일정이 수정되었습니다");
@@ -2513,6 +2544,16 @@ function renderReportsCollect() {
     ? dayReports.map((r) => dailyCard(r)).join("")
     : `<div class="empty">${UI.fmtDate(date)}에 작성된 일일보고가 없습니다.</div>`;
 
+  // 그 날 휴무/부재자 모아 표시
+  const leaveMembers = Store.list("members")
+    .map((m) => ({ name: m.name, lv: leaveLabelFor(m.id, date) }))
+    .filter((x) => x.lv);
+  const leaveBar = leaveMembers.length
+    ? `<div class="leave-bar">🌴 ${leaveMembers
+        .map((x) => `<span class="leave-chip">${UI.esc(x.name)} <b>${UI.esc(x.lv)}</b></span>`)
+        .join("")}</div>`
+    : "";
+
   return `
     ${reportCollectCalendar()}
     <div class="collect-head">
@@ -2521,6 +2562,7 @@ function renderReportsCollect() {
     dayReports.length ? "" : "disabled"
   }>📄 취합 제출 양식 (${dayReports.length}명)</button>
     </div>
+    ${leaveBar}
     <div class="list">${cards}</div>`;
 }
 
@@ -2601,15 +2643,18 @@ function combinedSheetHTML(date) {
     .map((m) => {
       const r = byMember[m.id];
       const color = m.color || "#64748b";
+      const lv = leaveLabelFor(m.id, date);
       const body = r
         ? `
         <div class="cmb-row"><b>오늘 한 일</b><div>${r.done ? reportRich(r.done) : "-"}</div></div>
         <div class="cmb-row"><b>내일 할 일</b><div>${r.todo ? reportRich(r.todo) : "-"}</div></div>
         ${r.note ? `<div class="cmb-row"><b>특이사항</b><div>${reportRich(r.note)}</div></div>` : ""}`
+        : lv
+        ? `<div class="cmb-empty leave">🌴 ${UI.esc(lv)}</div>`
         : `<div class="cmb-empty">미작성</div>`;
       const nameStyle = `background:${mixHex(color, "#ffffff", 16)};color:${mixHex(color, "#1f2937", 80)}`;
       return `
-        <div class="cmb-card ${r ? "" : "is-empty"}" style="--c:${UI.esc(color)}">
+        <div class="cmb-card ${r ? "" : lv ? "is-leave" : "is-empty"}" style="--c:${UI.esc(color)}">
           <div class="cmb-head"><span class="cmb-name" style="${nameStyle}">${UI.esc(m.name)}</span></div>
           <div class="cmb-body">${body}</div>
         </div>`;
@@ -2678,8 +2723,11 @@ function buildAutoReportDraft(detailIds) {
   };
 
   const doneLines = [];
+  // 휴무/부재(연차 등)면 '오늘 한 일' 맨 위에 자동 기입
+  const myLeave = leaveLabelFor(me, today);
+  if (myLeave) doneLines.push(`- [${myLeave}]`);
   // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0) — 여기선 진행률(%) 표기 안 함
-  doneToday.forEach((t) => doneLines.push(fmtDone(t, "(완료)")));
+  doneToday.forEach((t) => doneLines.push(fmtDone(t, "완료")));
   doingTasks
     .filter((t) => (parseInt(t.progress) || 0) > 0)
     .forEach((t) => doneLines.push(fmtDone(t)));
