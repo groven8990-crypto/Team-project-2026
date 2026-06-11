@@ -1631,8 +1631,8 @@ function dayDetailItem(e) {
     <div class="dd-item">
       <div class="dd-item-top">
         <span class="dd-dot ${scopeClass(e)}"></span>
-        <strong>${e.leave_type ? "🌴 " : ""}${UI.esc(e.title)}</strong>
-        ${e.leave_type ? `<span class="dd-tag leave">${UI.esc(e.leave_type)}</span>` : ""}
+        <strong>${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</strong>
+        ${eventLeave(e) ? `<span class="dd-tag leave">${UI.esc(eventLeave(e))}</span>` : ""}
         ${tags}
       </div>
       <div class="dd-item-meta">
@@ -1672,19 +1672,34 @@ function scopeClass(e) {
   return s.includes("month") ? "scope-month" : s.includes("week") ? "scope-week" : "scope-day";
 }
 
+/* 일정의 휴무/부재 구분명 반환. 신규는 scope에 'leave:연차' 토큰으로 저장,
+   구버전(leave_type 컬럼)도 호환 */
+function eventLeave(e) {
+  if (e.leave_type) return e.leave_type;
+  const tok = (e.scope || "")
+    .split(",")
+    .map((x) => x.trim())
+    .find((x) => x.startsWith("leave:"));
+  if (tok) return tok.slice(6);
+  // 폴백: 제목이 휴무 구분명과 정확히 같으면 휴무로 인식
+  // (예전에 leave_type 컬럼이 누락돼 제목만 저장된 데이터 복구)
+  const title = (e.title || "").trim();
+  return LEAVE_TYPES.includes(title) ? title : "";
+}
+
 /* 특정 멤버가 그 날짜에 등록된 휴무/부재 구분명 반환 (없으면 "") */
 function leaveLabelFor(memberId, dateStr) {
   if (!memberId || !dateStr) return "";
   const labels = Store.list("events")
     .filter((e) => {
-      if (!e.leave_type) return false;
+      if (!eventLeave(e)) return false;
       const s = e.date;
       const en = e.end_date || e.date;
       if (!s || dateStr < s || dateStr > en) return false;
       const parts = Array.isArray(e.participants) ? e.participants : [];
       return parts.includes(memberId) || e.member_id === memberId;
     })
-    .map((e) => e.leave_type);
+    .map((e) => eventLeave(e));
   return [...new Set(labels)].join("·");
 }
 
@@ -1718,9 +1733,9 @@ function calendarGrid(year, month, events) {
       .map(
         (e) =>
           `<div class="cal-ev-wrap">
-             <div class="cal-ev ${scopeClass(e)} ${e.leave_type ? "is-leave" : ""}" data-act="event-edit" data-id="${
+             <div class="cal-ev ${scopeClass(e)} ${eventLeave(e) ? "is-leave" : ""}" data-act="event-edit" data-id="${
             e.id
-          }" title="${UI.esc(e.title)}">${e.leave_type ? "🌴 " : ""}${UI.esc(e.title)}</div>
+          }" title="${UI.esc(e.title)}">${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</div>
              ${
                Array.isArray(e.participants) && e.participants.length
                  ? `<div class="cal-ev-dots">${memberDots(e.participants)}</div>`
@@ -1754,7 +1769,7 @@ function calendarGrid(year, month, events) {
 
 async function eventForm(existing, presetDate, isLeave) {
   const values = existing
-    ? { ...existing, scopes: eventScopes(existing) }
+    ? { ...existing, scopes: eventScopes(existing), leave_type: eventLeave(existing) }
     : {
         member_id: curUser(),
         date: presetDate || UI.todayInput(),
@@ -1807,12 +1822,15 @@ async function eventForm(existing, presetDate, isLeave) {
     ],
   });
   if (!res) return;
-  // 다중 강조(scopes 배열) → scope 문자열로 저장 (예: "week,month")
-  const sc = Array.isArray(res.scopes) ? res.scopes : [];
-  res.scope = sc.length ? sc.join(",") : "day";
-  delete res.scopes;
   // 제목 비었으면 휴무 구분명(또는 '일정')으로 채움
   if (!res.title || !res.title.trim()) res.title = res.leave_type || "일정";
+  // 강조(week/month) + 휴무(leave:연차)를 scope 문자열 하나에 인코딩
+  // → Supabase에 별도 컬럼 없이도 저장됨(클라우드 모드 호환)
+  const tokens = Array.isArray(res.scopes) ? res.scopes.slice() : [];
+  if (res.leave_type) tokens.push("leave:" + res.leave_type);
+  res.scope = tokens.length ? tokens.join(",") : "day";
+  delete res.scopes;
+  delete res.leave_type; // 별도 컬럼 저장 안 함(scope에 인코딩됨)
   if (existing) {
     await Store.update("events", existing.id, res);
     UI.toast("일정이 수정되었습니다");
