@@ -236,7 +236,7 @@ const HELP = {
     items: [
       "【일일 보고】 오늘 한 일·내일 할 일·특이사항을 작성해요.",
       "  · '⚡ 자동생성'을 누르면 오늘 진행 중·완료된 업무가 진행률과 함께 자동으로 채워져요.",
-      "  · 상세내용이 있는 업무가 있으면, 자동생성 시 '오늘 한 일'에 상세까지 넣을 업무를 골라요. 고른 업무는 제목이 굵게 표시되고 아래에 '-'로 상세가 붙어요(내일 할 일은 항상 제목만).",
+      "  · 상세내용이 있는 업무가 있으면, 자동생성 시 '오늘 한 일'에 상세까지 넣을 업무를 골라요. 고른 업무는 제목 아래에 '•'로 상세가 붙어요(제목은 '-', 상세는 '•'로 구분 / 내일 할 일은 항상 제목만).",
       "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
       "【주간 계획】 이번 주에 할 계획을 미리 작성하는 보고서예요 (지난 주 실적 정리가 아니에요!).",
       "  · '⚡ 자동생성'을 누르면 이번 주 등록된 업무·일정이 초안으로 채워져요.",
@@ -2660,16 +2660,16 @@ function buildAutoReportDraft(detailIds) {
   const todoTasks = mineTasks.filter((t) => t.status === "todo");
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
-  // 오늘 한 일 줄: 선택된 업무는 제목을 굵게(**)하고 아래에 - 로 상세내용 표기
+  // 오늘 한 일 줄: 제목은 - 로, 선택된 업무의 상세내용은 아래에 • 로 표기(구분)
   const fmtDone = (t, suffix) => {
-    const title = `${t.title}${suffix ? " " + suffix : ""}`;
+    const title = `- ${t.title}${suffix ? " " + suffix : ""}`;
     const detail = (t.detail || "").trim();
-    if (!detailSet.has(t.id) || !detail) return `- ${title}`;
+    if (!detailSet.has(t.id) || !detail) return title;
     const body = detail
       .split(/\r?\n/)
-      .map((s) => "  - " + s.trim())
+      .map((s) => "  • " + s.trim())
       .join("\n");
-    return `**${title}**\n${body}`;
+    return title + "\n" + body;
   };
 
   const doneLines = [];
@@ -2899,16 +2899,16 @@ async function reportForm(existing, preset) {
 }
 
 /* 보고서 본문 렌더: **굵게** 지원 + 줄바꿈 유지 (esc 후 처리해 안전)
-   예전 데이터에 남은 ↳ 화살표는 - 로 정리 */
+   예전 데이터에 남은 ↳ 화살표는 • 점으로 정리 */
 function reportRich(s) {
-  return UI.esc(String(s || "").replace(/↳/g, "-"))
+  return UI.esc(String(s || "").replace(/↳/g, "•"))
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
     .replace(/\n/g, "<br>");
 }
-/* 복사/내보내기용 평문: ** 굵게 마커 제거, ↳ → - */
+/* 복사/내보내기용 평문: ** 굵게 마커 제거, ↳ → • */
 function stripMd(s) {
   return String(s || "")
-    .replace(/↳/g, "-")
+    .replace(/↳/g, "•")
     .replace(/\*\*(.+?)\*\*/g, "$1");
 }
 
