@@ -808,7 +808,7 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 }
 .ft-btn:hover { background: rgba(255,255,255,.34); }
 .ft-body { padding: 8px; overflow-y: auto; }
-.float-todo.min .ft-body { display: none; }
+.float-todo.min .ft-body, .float-todo.min .ft-add { display: none; }
 .ft-item + .ft-item { border-top: 1px solid var(--line); }
 .ft-row { display: flex; align-items: center; gap: 8px; padding: 7px 6px; border-radius: 8px; }
 .ft-row:hover { background: var(--panel-2); }

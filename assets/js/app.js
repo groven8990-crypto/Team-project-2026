@@ -3742,6 +3742,36 @@ const FloatTodo = (() => {
     update();
   }
 
+  // 제목만으로 내 할일에 바로 등록 (본문 위젯·팝업 공용)
+  function quickAdd(inputEl) {
+    const title = (inputEl.value || "").trim();
+    if (!title) {
+      inputEl.focus();
+      return;
+    }
+    if (!curUser()) {
+      UI.toast("상단에서 본인 이름을 먼저 선택하세요", "warn");
+      return;
+    }
+    Store.add("tasks", { title, assignee_id: curUser(), status: "todo" });
+    inputEl.value = "";
+    inputEl.focus();
+  }
+
+  // 입력칸 + 추가 버튼에 빠른 추가 동작 연결
+  function wireQuickAdd(scope) {
+    const input = scope.querySelector(".ft-add-input");
+    const btn = scope.querySelector("[data-ft-add]");
+    if (!input || !btn) return;
+    btn.addEventListener("click", () => quickAdd(input));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        quickAdd(input);
+      }
+    });
+  }
+
   function countText() {
     const list = myTasks();
     const doing = list.filter((t) => t.status === "doing").length;
@@ -3762,6 +3792,10 @@ const FloatTodo = (() => {
           <button class="ft-btn" data-ft-close title="닫기">✕</button>
         </span>
       </div>
+      <div class="ft-add">
+        <input class="ft-add-input" type="text" placeholder="할일 입력 후 Enter 또는 ＋" maxlength="200">
+        <button class="ft-add-btn" data-ft-add title="할일 추가">＋</button>
+      </div>
       <div class="ft-body"></div>`;
     document.body.appendChild(el);
 
@@ -3772,6 +3806,7 @@ const FloatTodo = (() => {
       applyMin();
     };
     el.querySelector("[data-ft-win]").onclick = openPopup;
+    wireQuickAdd(el);
     enableDrag(el.querySelector("[data-ft-drag]"));
     restorePos();
     applyMin();
@@ -3914,28 +3949,7 @@ const FloatTodo = (() => {
       } catch (e) {}
     });
     // 빠른 추가 (제목만으로 내 할일에 바로 등록)
-    const addInput = wrap.querySelector(".ft-add-input");
-    const doAdd = () => {
-      const title = addInput.value.trim();
-      if (!title) {
-        addInput.focus();
-        return;
-      }
-      if (!curUser()) {
-        UI.toast("상단에서 본인 이름을 먼저 선택하세요", "warn");
-        return;
-      }
-      Store.add("tasks", { title, assignee_id: curUser(), status: "todo" });
-      addInput.value = "";
-      addInput.focus();
-    };
-    wrap.querySelector("[data-ft-add]").addEventListener("click", doAdd);
-    addInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        doAdd();
-      }
-    });
+    wireQuickAdd(wrap);
     // 완료/진행/펼치기 버튼 위임 (wrap에만 부착 → 재빌드 시 누적/잔존 없음)
     wrap.addEventListener("click", (e) => {
       const a = e.target.closest("[data-act]");
