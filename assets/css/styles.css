@@ -836,6 +836,10 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
 .ft-item.exp { background: var(--panel-2); border-radius: 8px; }
 .ft-item.exp .ft-row:hover { background: transparent; }
 .ft-detail { padding: 2px 10px 10px 34px; display: flex; flex-direction: column; gap: 8px; }
+.ft-prog { display: flex; align-items: center; gap: 8px; }
+.ft-prog-label { font-size: 11px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+.ft-prog .prog-range { flex: 1; min-width: 0; cursor: pointer; }
+.ft-prog .prog-edit-num { font-size: 12px; font-weight: 700; color: var(--brand); min-width: 34px; text-align: right; }
 .ft-d-line { font-size: 12px; color: var(--muted); }
 .ft-d-content { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); white-space: pre-wrap; word-break: break-word; }
 .ft-d-actions { display: flex; justify-content: flex-end; }

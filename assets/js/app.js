@@ -752,6 +752,28 @@ function statusPatch(status, existing) {
   return patch;
 }
 
+/* 진행률 슬라이더 변경 적용 (대시보드·플로팅 위젯·팝업 공용)
+   진행률 값에 따라 상태(할 일/진행 중/완료)도 자동 변경 */
+function applyProgressChange(id, value) {
+  if (!id) return;
+  const v = Math.max(0, Math.min(100, parseInt(value) || 0));
+  const cur = Store.list("tasks").find((x) => x.id === id);
+  if (!cur) return;
+  let patch, statusLabel;
+  if (v >= 100) {
+    patch = statusPatch("done", cur);
+    statusLabel = " · 완료";
+  } else if (v > 0) {
+    patch = { status: "doing", done_at: "", progress: String(v) };
+    statusLabel = " · 진행 중";
+  } else {
+    patch = { status: "todo", done_at: "", progress: "0" };
+    statusLabel = " · 할 일";
+  }
+  Store.update("tasks", id, patch);
+  UI.toast("진행률 " + v + "%" + statusLabel);
+}
+
 function personSection(name, color, memberId, tasks, isMe) {
   const today = UI.todayInput();
   // 진행/할일(미완료) + 오늘 완료만 노출, 이전 완료는 숨김
@@ -3875,10 +3897,15 @@ const FloatTodo = (() => {
         const icon = t.status === "todo" ? "▶" : "✓";
         const tip = t.status === "todo" ? "진행 시작" : "완료 처리";
         const exp = expanded.has(t.id);
+        const prog = t.status === "done" ? 100 : parseInt(t.progress) || 0;
         const detail = exp
           ? `
           <div class="ft-detail">
-            ${progressBar(t.status === "done" ? 100 : parseInt(t.progress) || 0)}
+            <div class="ft-prog">
+              <span class="ft-prog-label">진행률</span>
+              <input type="range" min="0" max="100" step="5" value="${prog}" class="prog-range" data-id="${t.id}">
+              <span class="prog-edit-num">${prog}%</span>
+            </div>
             ${t.due_date ? `<div class="ft-d-line">📅 마감 ${UI.fmtDate(t.due_date)}</div>` : ""}
             <div class="ft-d-content">${
               t.detail ? UI.nl2br(t.detail) : '<span class="muted">상세 내용이 없습니다.</span>'
@@ -4129,6 +4156,18 @@ const FloatTodo = (() => {
         handleAction(a.getAttribute("data-act"), a);
       }
     });
+    // 진행률 슬라이더: 드래그 중 % 갱신 + 놓으면 저장 (팝업 창 자체 이벤트)
+    wrap.addEventListener("input", (e) => {
+      if (e.target.classList && e.target.classList.contains("prog-range")) {
+        const num = e.target.parentElement.querySelector(".prog-edit-num");
+        if (num) num.textContent = (parseInt(e.target.value) || 0) + "%";
+      }
+    });
+    wrap.addEventListener("change", (e) => {
+      if (e.target.classList && e.target.classList.contains("prog-range")) {
+        applyProgressChange(e.target.getAttribute("data-id"), e.target.value);
+      }
+    });
   }
 
   function openPopup() {
@@ -4213,22 +4252,7 @@ function bindGlobalEvents() {
     }
     // 진행률 인라인 수정 (대시보드) — 진행률에 따라 상태도 자동 변경
     if (e.target.classList.contains("prog-range") || e.target.classList.contains("pt-prog")) {
-      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
-      const id = e.target.getAttribute("data-id");
-      const cur = Store.list("tasks").find((x) => x.id === id);
-      let patch, statusLabel;
-      if (v >= 100) {
-        patch = statusPatch("done", cur);
-        statusLabel = " · 완료";
-      } else if (v > 0) {
-        patch = { status: "doing", done_at: "", progress: String(v) };
-        statusLabel = " · 진행 중";
-      } else {
-        patch = { status: "todo", done_at: "", progress: "0" };
-        statusLabel = " · 할 일";
-      }
-      Store.update("tasks", id, patch);
-      UI.toast("진행률 " + v + "%" + statusLabel);
+      applyProgressChange(e.target.getAttribute("data-id"), e.target.value);
     }
   });
 
