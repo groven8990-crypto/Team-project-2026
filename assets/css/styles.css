@@ -345,7 +345,8 @@ a { color: inherit; }
 .pay-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .pay-row:first-child { border-top: none; }
 .pay-badge { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
-.pay-badge.d { background: #dbeafe; color: #1d4ed8; }
+.pay-badge.o { background: #e2e8f0; color: #475569; }
+.pay-badge.w { background: #dbeafe; color: #1d4ed8; }
 .pay-badge.m { background: #ede9fe; color: #6d28d9; }
 .pay-vendor { font-weight: 700; font-size: 14px; }
 .pay-amount { font-weight: 800; color: #b45309; font-size: 14px; }

@@ -208,12 +208,11 @@ const HELP = {
   payments: {
     title: "결제 일정 사용법",
     items: [
-      "'+ 결제 건 추가'로 업체명·금액·결제일·구분(일별/월별)·세부 내역을 등록해요.",
-      "【일별 보기】 결제일 날짜별로 묶어 보여주고, 날짜마다 합계와 건수를 알려줘요.",
-      "【업체별 보기】 업체마다 묶어서 그 업체의 결제 합계와 건들을 보여줘요.",
-      "상단에 그 달 전체 결제 합계와 건수가 표시되고, ‹ › « » 로 달·연도를 이동해요.",
-      "등록한 결제 건은 캘린더에도 💰 업체·금액으로 함께 표시돼요(날짜 칸 클릭 → 그 날 결제 확인).",
-      "결제일을 바꾸려면 '수정'에서 날짜만 바꾸면 돼요. 그러면 일정이 그에 맞게 조절돼요.",
+      "'+ 결제 건 추가'로 업체명·금액·반복 주기·결제일(기준일)·세부 내역을 등록해요.",
+      "【반복】 '매주'로 하면 기준일의 요일마다, '매월'로 하면 기준일의 날짜마다 자동으로 반복 표시돼요. 한 번만 결제면 '한 번만'을 고르세요. (주결제 업체는 매주 그 요일에 자동으로 떠요!)",
+      "달력에 날짜별 결제 합계(💰)가 보이고, 날짜 칸을 클릭하면 그 날짜로 결제를 바로 추가할 수 있어요.",
+      "【일별 보기】 결제 발생 날짜별로, 【업체별 보기】 업체별로 묶어 합계·건수를 보여줘요(반복 결제는 그 달에 발생하는 만큼 펼쳐서 합산돼요).",
+      "등록한 결제는 메인 캘린더에도 💰 업체·금액으로 함께 표시돼요. 결제일/주기를 바꾸려면 '수정'에서 고치면 일정이 그에 맞게 조절돼요.",
     ],
   },
   databoard: {
@@ -1643,6 +1642,8 @@ function openDayDetail(dateStr) {
   const paint = () => {
     const events = Store.list("events")
       .filter((e) => {
+        const pay = eventPayment(e);
+        if (pay) return payOccursOn(e, pay, dateStr); // 결제는 반복 규칙으로
         const s = e.date;
         const en = e.end_date || e.date;
         return s && dateStr >= s && dateStr <= en;
@@ -1696,7 +1697,7 @@ function dayDetailItem(e) {
       <div class="dd-item-top">
         <span class="dd-dot ${pay ? "" : scopeClass(e)}"></span>
         <strong>${pay ? "💰 " : eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</strong>
-        ${pay ? `<span class="dd-tag pay">${UI.esc(pay.type)} ${fmtWon(pay.amount)}</span>` : ""}
+        ${pay ? `<span class="dd-tag pay">${payRecurLabel(pay.recur)} ${fmtWon(pay.amount)}</span>` : ""}
         ${eventLeave(e) ? `<span class="dd-tag leave">${UI.esc(eventLeave(e))}</span>` : ""}
         ${tags}
       </div>
@@ -1770,8 +1771,8 @@ function leaveLabelFor(memberId, dateStr) {
   return [...new Set(labels)].join("·");
 }
 
-/* ===== 결제(지출) 일정 — events에 'pay:구분:금액' 토큰으로 인코딩 저장 ===== */
-/* 결제 정보 파싱: { type:'일별'|'월별', amount:Number } 또는 null */
+/* ===== 결제(지출) 일정 — events에 'pay:반복:금액' 토큰으로 인코딩 저장 ===== */
+/* 결제 정보 파싱: { recur:'once'|'weekly'|'monthly', amount:Number } 또는 null */
 function eventPayment(e) {
   const tok = (e.scope || "")
     .split(",")
@@ -1779,10 +1780,42 @@ function eventPayment(e) {
     .find((x) => x.startsWith("pay:"));
   if (!tok) return null;
   const parts = tok.split(":");
-  return { type: parts[1] || "일별", amount: parseInt(parts[2]) || 0 };
+  let recur = parts[1] || "once";
+  // 구버전 호환(일별/월별/주별)
+  if (recur === "일별") recur = "once";
+  else if (recur === "월별") recur = "monthly";
+  else if (recur === "주별") recur = "weekly";
+  return { recur, amount: parseInt(parts[2]) || 0 };
 }
 function isPayment(e) {
   return !!eventPayment(e);
+}
+function payRecurLabel(recur) {
+  return { once: "한 번만", weekly: "매주", monthly: "매월" }[recur] || "한 번만";
+}
+/* YYYY-MM-DD → 요일/일 (타임존 영향 없이) */
+function ymd(ds) {
+  const [y, m, d] = (ds || "").split("-").map(Number);
+  if (!y) return null;
+  return { y, m, d, dow: new Date(y, m - 1, d).getDay() };
+}
+/* 결제 e가 dateStr에 발생하는지(반복 규칙 적용) */
+function payOccursOn(e, p, dateStr) {
+  const anchor = e.date;
+  if (!anchor || !dateStr || dateStr < anchor) return false; // 시작(기준)일 이전엔 없음
+  if (p.recur === "weekly") return ymd(dateStr).dow === ymd(anchor).dow;
+  if (p.recur === "monthly") return ymd(dateStr).d === ymd(anchor).d;
+  return dateStr === anchor; // once
+}
+/* 결제 e가 해당 연·월에 발생하는 날짜 목록 */
+function payOccurrencesInMonth(e, p, year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const out = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    if (payOccursOn(e, p, ds)) out.push(ds);
+  }
+  return out;
 }
 /* 금액 포맷: 1200000 → "1,200,000원" */
 function fmtWon(n) {
@@ -1808,8 +1841,8 @@ function paymentCalendar(year, month, payList) {
   const sumByDate = {};
   const cntByDate = {};
   payList.forEach((x) => {
-    sumByDate[x.e.date] = (sumByDate[x.e.date] || 0) + x.p.amount;
-    cntByDate[x.e.date] = (cntByDate[x.e.date] || 0) + 1;
+    sumByDate[x.date] = (sumByDate[x.date] || 0) + x.p.amount;
+    cntByDate[x.date] = (cntByDate[x.date] || 0) + 1;
   });
   const wd = ["일", "월", "화", "수", "목", "금", "토"]
     .map((d, i) => `<div class="cal-wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${d}</div>`)
@@ -1853,6 +1886,8 @@ function calendarGrid(year, month, events) {
     const hol = holidayName(ds);
     const dayCls = hol || dow === 0 ? "sun" : dow === 6 ? "sat" : "";
     const dayEvents = events.filter((e) => {
+      const pay = eventPayment(e);
+      if (pay) return payOccursOn(e, pay, ds); // 결제는 반복 규칙으로 표시
       const start = e.date;
       const end = e.end_date || e.date;
       return start && ds >= start && ds <= end;
@@ -1982,11 +2017,14 @@ function renderPayments() {
   const month = ref.getMonth();
   const view = App.state.payView;
 
-  // 이번 달 결제 건 (결제일이 해당 월)
-  const all = Store.list("events")
-    .map((e) => ({ e, p: eventPayment(e) }))
-    .filter((x) => x.p && belongsToMonth(x.e.date, year, month))
-    .sort((a, b) => (a.e.date || "").localeCompare(b.e.date || ""));
+  // 이번 달 결제 발생분 (반복 규칙 적용해 occurrence로 펼침)
+  const all = [];
+  Store.list("events").forEach((e) => {
+    const p = eventPayment(e);
+    if (!p) return;
+    payOccurrencesInMonth(e, p, year, month).forEach((date) => all.push({ e, p, date }));
+  });
+  all.sort((a, b) => a.date.localeCompare(b.date));
 
   const monthTotal = all.reduce((s, x) => s + x.p.amount, 0);
 
@@ -2011,15 +2049,15 @@ function renderPayments() {
   if (!all.length) {
     body = `<div class="empty">${year}년 ${month + 1}월에 등록된 결제 건이 없습니다. '+ 결제 건 추가'로 등록하세요.</div>`;
   } else if (view === "daily") {
-    // 일별: 날짜별 그룹
+    // 일별: 발생 날짜별 그룹
     const byDate = {};
-    all.forEach((x) => ((byDate[x.e.date] = byDate[x.e.date] || []).push(x)));
+    all.forEach((x) => ((byDate[x.date] = byDate[x.date] || []).push(x)));
     body = Object.keys(byDate)
       .sort()
       .map((d) => {
         const items = byDate[d];
         const dayTotal = items.reduce((s, x) => s + x.p.amount, 0);
-        const wd = ["일", "월", "화", "수", "목", "금", "토"][new Date(d).getDay()] || "";
+        const wd = ["일", "월", "화", "수", "목", "금", "토"][ymd(d).dow] || "";
         return `
         <div class="pay-group">
           <div class="pay-group-head">
@@ -2037,7 +2075,7 @@ function renderPayments() {
     body = Object.keys(byVendor)
       .sort((a, b) => a.localeCompare(b, "ko"))
       .map((v) => {
-        const items = byVendor[v].sort((a, b) => (a.e.date || "").localeCompare(b.e.date || ""));
+        const items = byVendor[v].sort((a, b) => a.date.localeCompare(b.date));
         const vTotal = items.reduce((s, x) => s + x.p.amount, 0);
         return `
         <div class="pay-group">
@@ -2045,7 +2083,7 @@ function renderPayments() {
             <span>🏢 ${UI.esc(v)}</span>
             <span class="pay-group-sum">${fmtWon(vTotal)} · ${items.length}건</span>
           </div>
-          ${items.map((x) => payRow(x.e, x.p, true)).join("")}
+          ${items.map((x) => payRow(x.e, x.p, x.date)).join("")}
         </div>`;
       })
       .join("");
@@ -2065,12 +2103,13 @@ function renderPayments() {
     </section>`;
 }
 
-/* 결제 건 한 줄 (vendorMode=true면 업체명 대신 날짜를 앞세움) */
-function payRow(e, p, vendorMode) {
-  const head = vendorMode ? UI.fmtDate(e.date) : UI.esc(e.title || "(업체 미지정)");
+/* 결제 건 한 줄 (occDate가 주어지면 업체명 대신 그 발생 날짜를 앞세움) */
+function payRow(e, p, occDate) {
+  const head = occDate ? UI.fmtDate(occDate) : UI.esc(e.title || "(업체 미지정)");
+  const badgeCls = p.recur === "monthly" ? "m" : p.recur === "weekly" ? "w" : "o";
   return `
     <div class="pay-row">
-      <span class="pay-badge ${p.type === "월별" ? "m" : "d"}">${p.type}</span>
+      <span class="pay-badge ${badgeCls}">${payRecurLabel(p.recur)}</span>
       <span class="pay-vendor clickable" data-act="pay-edit" data-id="${e.id}">${head}</span>
       <span class="pay-amount">${fmtWon(p.amount)}</span>
       ${e.note ? `<span class="pay-note">${UI.esc(e.note)}</span>` : ""}
@@ -2082,19 +2121,19 @@ function payRow(e, p, vendorMode) {
 }
 
 async function paymentForm(existing, presetDate) {
-  const p = existing ? eventPayment(existing) || { type: "일별", amount: 0 } : null;
+  const p = existing ? eventPayment(existing) || { recur: "once", amount: 0 } : null;
   const values = existing
     ? {
         title: existing.title,
         date: existing.date,
-        pay_type: p.type,
+        recur: p.recur,
         amount: String(p.amount || ""),
         note: existing.note || "",
         member_id: existing.member_id || curUser(),
       }
     : {
         date: presetDate || UI.todayInput(),
-        pay_type: "일별",
+        recur: "monthly",
         member_id: curUser(),
       };
   const res = await UI.formModal({
@@ -2104,16 +2143,17 @@ async function paymentForm(existing, presetDate) {
     fields: [
       { name: "title", label: "업체명", type: "text", required: true, full: true },
       { name: "amount", label: "금액 (숫자)", type: "text", required: true, placeholder: "예: 1200000" },
-      { name: "date", label: "결제일", type: "date", required: true },
       {
-        name: "pay_type",
-        label: "결제 구분",
+        name: "recur",
+        label: "반복 (결제 주기)",
         type: "select",
         options: [
-          { value: "일별", label: "일별 결제" },
-          { value: "월별", label: "월별 결제" },
+          { value: "once", label: "한 번만 (지정한 날짜에)" },
+          { value: "weekly", label: "매주 (기준일의 요일마다)" },
+          { value: "monthly", label: "매월 (기준일의 날짜마다)" },
         ],
       },
+      { name: "date", label: "결제일 / 반복 기준일", type: "date", required: true },
       { name: "note", label: "세부 내역 (품목·계좌 등)", type: "textarea", full: true },
     ],
   });
@@ -2124,7 +2164,7 @@ async function paymentForm(existing, presetDate) {
     date: res.date,
     note: res.note || "",
     member_id: res.member_id || curUser(),
-    scope: `pay:${res.pay_type || "일별"}:${amount}`,
+    scope: `pay:${res.recur || "once"}:${amount}`,
   };
   if (existing) {
     await Store.update("events", existing.id, payload);
