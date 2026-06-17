@@ -1789,6 +1789,48 @@ function fmtWon(n) {
   const v = parseInt(n) || 0;
   return v.toLocaleString("ko-KR") + "원";
 }
+/* 달력 칸용 짧은 금액: 1200000 → "120만", 5000 → "5천", 작은 값은 그대로 */
+function shortWon(n) {
+  const v = parseInt(n) || 0;
+  if (v >= 10000) {
+    const man = v / 10000;
+    return (Number.isInteger(man) ? man : Math.round(man)).toLocaleString("ko-KR") + "만";
+  }
+  if (v >= 1000) return Math.round(v / 1000) + "천";
+  return v.toLocaleString("ko-KR");
+}
+
+/* 결제 일정 월 달력: 날짜별 결제 합계 표시, 칸 클릭 시 그 날짜로 결제 추가 */
+function paymentCalendar(year, month, payList) {
+  const startDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = UI.todayInput();
+  const sumByDate = {};
+  const cntByDate = {};
+  payList.forEach((x) => {
+    sumByDate[x.e.date] = (sumByDate[x.e.date] || 0) + x.p.amount;
+    cntByDate[x.e.date] = (cntByDate[x.e.date] || 0) + 1;
+  });
+  const wd = ["일", "월", "화", "수", "목", "금", "토"]
+    .map((d, i) => `<div class="cal-wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${d}</div>`)
+    .join("");
+  let cells = "";
+  for (let i = 0; i < startDay; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dow = (startDay + d - 1) % 7;
+    const hol = holidayName(ds);
+    const dayCls = hol || dow === 0 ? "sun" : dow === 6 ? "sat" : "";
+    const amt = sumByDate[ds];
+    cells += `
+      <div class="cal-cell pay-cell ${ds === today ? "today" : ""}" data-act="pay-add-on" data-date="${ds}" title="이 날짜에 결제 추가">
+        <div class="cal-daynum ${dayCls}">${d}</div>
+        ${amt ? `<div class="pay-cell-amt">💰 ${shortWon(amt)}<span class="pay-cell-cnt">${cntByDate[ds]}건</span></div>` : ""}
+      </div>`;
+  }
+  return `<div class="cal-grid pay-cal">${wd}${cells}</div>
+    <div class="cal-legend"><span class="muted">날짜 칸을 클릭하면 그 날짜로 결제 건을 추가할 수 있어요</span></div>`;
+}
 
 function calendarGrid(year, month, events) {
   const first = new Date(year, month, 1);
@@ -2015,9 +2057,10 @@ function renderPayments() {
         <h2>💰 결제 일정</h2>
         <button class="btn primary" data-act="pay-add">+ 결제 건 추가</button>
       </div>
-      <p class="muted">업체별 결제(지출) 건을 일별·업체별로 정리해 봐요. 등록한 건은 캘린더에도 💰로 표시되고, 결제일을 바꿔 일정을 조절할 수 있어요.</p>
-      ${toggle}
+      <p class="muted">업체별 결제(지출) 건을 달력·일별·업체별로 정리해 봐요. 날짜 칸을 클릭하면 그 날짜로 결제를 추가하고, 결제일을 바꿔 일정을 조절할 수 있어요.</p>
       ${nav}
+      ${paymentCalendar(year, month, all)}
+      ${toggle}
       <div class="pay-list">${body}</div>
     </section>`;
 }
@@ -3017,7 +3060,6 @@ function buildAutoReportDraft(opts) {
   // 진행 중인 일 (진행률 포함)
   const doingTasks = mineTasks.filter((t) => t.status === "doing");
   const todoTasks = mineTasks.filter((t) => t.status === "todo");
-  const pausedTasks = mineTasks.filter((t) => t.status === "paused");
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
   // 오늘 한 일 줄: 제목은 - 로. 선택된 업무의 상세내용은 한 덩어리로 붙이되
@@ -3049,14 +3091,13 @@ function buildAutoReportDraft(opts) {
     .forEach((t) => doneLines.push(fmtDone(t)));
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
-  // 내일 할 일: '할 일(todo)' + 진행 중 업무(진행률 % 표시) + 멈춤 업무 — 선택된 것만
+  // 내일 할 일: '할 일(todo)' + 진행 중 업무(진행률 % 표시) — 선택된 것만 (멈춤 업무는 제외)
   const todoLines = [];
   todoTasks.filter(inTodo).forEach((t) => todoLines.push("- " + t.title));
   doingTasks.filter(inTodo).forEach((t) => {
     const p = parseInt(t.progress) || 0;
     todoLines.push("- " + t.title + (p > 0 ? ` (진행 ${p}%)` : ""));
   });
-  pausedTasks.filter(inTodo).forEach((t) => todoLines.push("- " + t.title + " (멈춤)"));
 
   return {
     member_id: me,
@@ -3083,10 +3124,9 @@ async function startAutoReport() {
   );
   const todoTasks = mine.filter((t) => t.status === "todo");
   const doingAll = mine.filter((t) => t.status === "doing");
-  const pausedAll = mine.filter((t) => t.status === "paused");
 
   const doneCands = [...doneToday, ...doingProg]; // 오늘 한 일 후보
-  const todoCands = [...todoTasks, ...doingAll, ...pausedAll]; // 내일 할 일 후보
+  const todoCands = [...todoTasks, ...doingAll]; // 내일 할 일 후보 (멈춤은 제외)
   const detailCands = doneCands.filter((t) => (t.detail || "").trim());
 
   // 넣을 만한 업무가 전혀 없으면 빈 양식으로 바로 작성
@@ -3099,11 +3139,7 @@ async function startAutoReport() {
       ? `${t.title} · 완료`
       : `${t.title} · 진행 ${parseInt(t.progress) || 0}%`;
   const todoLabel = (t) =>
-    t.status === "doing"
-      ? `${t.title} · 진행 ${parseInt(t.progress) || 0}%`
-      : t.status === "paused"
-      ? `${t.title} · ⏸ 멈춤`
-      : t.title;
+    t.status === "doing" ? `${t.title} · 진행 ${parseInt(t.progress) || 0}%` : t.title;
 
   const fields = [];
   if (doneCands.length)
@@ -4035,6 +4071,7 @@ async function handleAction(act, el) {
 
     // 결제(지출) 일정
     case "pay-add": return paymentForm();
+    case "pay-add-on": return paymentForm(null, el.getAttribute("data-date"));
     case "pay-edit": return paymentForm(find("events"));
     case "pay-del":
       if (await UI.confirmBox("이 결제 건을 삭제할까요?")) await Store.remove("events", id);

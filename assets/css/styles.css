@@ -333,6 +333,11 @@ a { color: inherit; }
 .dd-tag.pay { background: #fef08a; color: #854d0e; }
 .pay-total { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
 .pay-total b { color: #b45309; font-size: 14px; }
+.pay-cal { margin-bottom: 14px; }
+.pay-cal .pay-cell { cursor: pointer; }
+.pay-cal .pay-cell:hover { background: #fffbeb; }
+.pay-cell-amt { margin-top: 4px; font-size: 11px; font-weight: 800; color: #b45309; background: #fef9c3; border-radius: 6px; padding: 2px 4px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; line-height: 1.3; }
+.pay-cell-cnt { color: #92857a; font-weight: 600; }
 .pay-list { display: flex; flex-direction: column; gap: 12px; }
 .pay-group { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; box-shadow: var(--shadow); }
 .pay-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; background: #fffbeb; border-bottom: 1px solid var(--line); font-weight: 800; font-size: 14px; }
