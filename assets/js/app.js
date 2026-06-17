@@ -238,8 +238,8 @@ const HELP = {
     title: "보고서 사용법",
     items: [
       "【일일 보고】 오늘 한 일·내일 할 일·특이사항을 작성해요.",
-      "  · '⚡ 자동생성'을 누르면 오늘 진행 중·완료된 업무가 진행률과 함께 자동으로 채워져요.",
-      "  · 상세내용이 있는 업무가 있으면, 자동생성 시 '오늘 한 일'에 상세까지 넣을 업무를 골라요. 고른 업무는 제목(-) 아래에 상세가 '•'로 한 번만 붙고, 여러 줄이어도 마커는 첫 줄에만 표시돼요(내일 할 일은 항상 제목만).",
+      "  · '⚡ 자동생성'을 누르면 선택 창이 떠요. '오늘 한 일'·'내일 할 일'에 넣을 업무를 체크로 직접 고르고(기본 전체 선택, 빼고 싶은 건 해제), 상세내용까지 넣을 업무도 따로 고를 수 있어요.",
+      "  · 상세를 고른 업무는 제목(-) 아래에 상세가 '•'로 한 번만 붙어요(내일 할 일은 항상 제목만).",
       "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
       "  · 날짜별 취합에서 각 보고 카드 아래 '💬 피드백' 칸에 직접 의견을 적고 '피드백 저장'을 누르면 팀원과 공유돼요(칸 밖을 눌러도 자동 저장).",
       "【주간 계획】 이번 주에 할 계획을 미리 작성하는 보고서예요 (지난 주 실적 정리가 아니에요!).",
@@ -2768,9 +2768,16 @@ function openCombinedReport(date) {
   openSheetModal(combinedSheetHTML(date), text, `일일보고_취합_${date}`);
 }
 
-/* detailIds: '오늘 한 일'에서 상세내용까지 넣을 업무 id 목록 (없으면 제목만) */
-function buildAutoReportDraft(detailIds) {
-  const detailSet = new Set(detailIds || []);
+/* opts: { doneIds, todoIds, detailIds } 선택 목록.
+   doneIds/todoIds가 주어지면 그 업무만 포함, 없으면 전부 포함.
+   detailIds는 '오늘 한 일'에서 상세내용까지 넣을 업무 */
+function buildAutoReportDraft(opts) {
+  opts = opts || {};
+  const detailSet = new Set(opts.detailIds || []);
+  const doneSel = opts.doneIds ? new Set(opts.doneIds) : null;
+  const todoSel = opts.todoIds ? new Set(opts.todoIds) : null;
+  const inDone = (t) => !doneSel || doneSel.has(t.id);
+  const inTodo = (t) => !todoSel || todoSel.has(t.id);
   const today = UI.todayInput();
   const me = curUser();
   const mineTasks = Store.list("tasks").filter((t) => !me || t.assignee_id === me);
@@ -2806,17 +2813,18 @@ function buildAutoReportDraft(detailIds) {
   // 휴무/부재(연차 등)면 '오늘 한 일' 맨 위에 자동 기입
   const myLeave = leaveLabelFor(me, today);
   if (myLeave) doneLines.push(`- [${myLeave}]`);
-  // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0) — 여기선 진행률(%) 표기 안 함
-  doneToday.forEach((t) => doneLines.push(fmtDone(t, "완료")));
+  // 오늘 한 일: 완료한 일 + 실제로 진행한 일(진행률 > 0) — 선택된 것만, 진행률(%) 표기 안 함
+  doneToday.filter(inDone).forEach((t) => doneLines.push(fmtDone(t, "완료")));
   doingTasks
     .filter((t) => (parseInt(t.progress) || 0) > 0)
+    .filter(inDone)
     .forEach((t) => doneLines.push(fmtDone(t)));
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
-  // 내일 할 일: 대시보드의 '할 일(todo)' + 진행 중 업무(진행률 % 표시)
+  // 내일 할 일: '할 일(todo)' + 진행 중 업무(진행률 % 표시) — 선택된 것만
   const todoLines = [];
-  todoTasks.forEach((t) => todoLines.push("- " + t.title));
-  doingTasks.forEach((t) => {
+  todoTasks.filter(inTodo).forEach((t) => todoLines.push("- " + t.title));
+  doingTasks.filter(inTodo).forEach((t) => {
     const p = parseInt(t.progress) || 0;
     todoLines.push("- " + t.title + (p > 0 ? ` (진행 ${p}%)` : ""));
   });
@@ -2830,38 +2838,87 @@ function buildAutoReportDraft(detailIds) {
   };
 }
 
-/* 자동생성: 상세내용을 넣을 업무를 먼저 고른 뒤 일일보고 초안 생성 */
+/* 자동생성: 보고서에 넣을 업무를 직접 골라서 초안 생성 */
 async function startAutoReport() {
   const today = UI.todayInput();
   const me = curUser();
   const mine = Store.list("tasks").filter((t) => !me || t.assignee_id === me);
-  // '오늘 한 일' 후보 중 상세내용이 있는 업무만 선택지로 노출
-  const candidates = mine.filter((t) => {
-    const isDone =
+
+  const doneToday = mine.filter(
+    (t) =>
       t.status === "done" &&
-      (t.updated_at || t.created_at || "").slice(0, 10) === today;
-    const isProg = t.status === "doing" && (parseInt(t.progress) || 0) > 0;
-    return (isDone || isProg) && (t.detail || "").trim();
-  });
-  // 상세 있는 업무가 없으면 바로 제목만으로 생성
-  if (!candidates.length) {
+      (t.updated_at || t.created_at || "").slice(0, 10) === today
+  );
+  const doingProg = mine.filter(
+    (t) => t.status === "doing" && (parseInt(t.progress) || 0) > 0
+  );
+  const todoTasks = mine.filter((t) => t.status === "todo");
+  const doingAll = mine.filter((t) => t.status === "doing");
+
+  const doneCands = [...doneToday, ...doingProg]; // 오늘 한 일 후보
+  const todoCands = [...todoTasks, ...doingAll]; // 내일 할 일 후보
+  const detailCands = doneCands.filter((t) => (t.detail || "").trim());
+
+  // 넣을 만한 업무가 전혀 없으면 빈 양식으로 바로 작성
+  if (!doneCands.length && !todoCands.length) {
     return reportForm(null, buildAutoReportDraft());
   }
+
+  const doneLabel = (t) =>
+    t.status === "done"
+      ? `${t.title} · 완료`
+      : `${t.title} · 진행 ${parseInt(t.progress) || 0}%`;
+  const todoLabel = (t) =>
+    t.status === "doing" ? `${t.title} · 진행 ${parseInt(t.progress) || 0}%` : t.title;
+
+  const fields = [];
+  if (doneCands.length)
+    fields.push({
+      name: "doneIds",
+      label: "📌 오늘 한 일에 넣을 업무 (체크 해제하면 빠져요)",
+      type: "checks",
+      full: true,
+      options: doneCands.map((t) => ({ value: t.id, label: doneLabel(t) })),
+    });
+  if (todoCands.length)
+    fields.push({
+      name: "todoIds",
+      label: "📋 내일 할 일에 넣을 업무",
+      type: "checks",
+      full: true,
+      options: todoCands.map((t) => ({ value: t.id, label: todoLabel(t) })),
+    });
+  if (detailCands.length)
+    fields.push({
+      name: "detailIds",
+      label: "📝 상세내용도 함께 넣을 업무 (오늘 한 일 · 기본은 제목만)",
+      type: "checks",
+      full: true,
+      options: detailCands.map((t) => ({ value: t.id, label: t.title })),
+    });
+
+  // 기본값: 오늘/내일 업무는 전부 체크, 상세는 비움
+  const values = {
+    doneIds: doneCands.map((t) => t.id),
+    todoIds: todoCands.map((t) => t.id),
+    detailIds: [],
+  };
+
   const res = await UI.formModal({
-    title: "상세내용 포함 선택",
+    title: "보고서에 넣을 업무 선택",
     submitText: "보고서 만들기",
-    fields: [
-      {
-        name: "ids",
-        label: "‘오늘 한 일’에 상세내용까지 넣을 업무를 고르세요 (선택 안 하면 제목만 들어가요)",
-        type: "checks",
-        full: true,
-        options: candidates.map((t) => ({ value: t.id, label: t.title })),
-      },
-    ],
+    values,
+    fields,
   });
   if (!res) return; // 취소
-  reportForm(null, buildAutoReportDraft(res.ids));
+  reportForm(
+    null,
+    buildAutoReportDraft({
+      doneIds: res.doneIds || [],
+      todoIds: res.todoIds || [],
+      detailIds: res.detailIds || [],
+    })
+  );
 }
 
 function fmtYMD(x) {
