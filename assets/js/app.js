@@ -241,6 +241,7 @@ const HELP = {
       "  · '⚡ 자동생성'을 누르면 오늘 진행 중·완료된 업무가 진행률과 함께 자동으로 채워져요.",
       "  · 상세내용이 있는 업무가 있으면, 자동생성 시 '오늘 한 일'에 상세까지 넣을 업무를 골라요. 고른 업무는 제목(-) 아래에 상세가 '•'로 한 번만 붙고, 여러 줄이어도 마커는 첫 줄에만 표시돼요(내일 할 일은 항상 제목만).",
       "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
+      "  · 날짜별 취합에서 각 보고 카드 아래 '💬 피드백' 칸에 직접 의견을 적고 '피드백 저장'을 누르면 팀원과 공유돼요(칸 밖을 눌러도 자동 저장).",
       "【주간 계획】 이번 주에 할 계획을 미리 작성하는 보고서예요 (지난 주 실적 정리가 아니에요!).",
       "  · '⚡ 자동생성'을 누르면 이번 주 등록된 업무·일정이 초안으로 채워져요.",
       "  · 주간 목표 진행률은 본인의 전체 업무 평균 진행률을 자동으로 계산해 넣어요.",
@@ -2539,6 +2540,7 @@ function renderReports() {
 }
 
 function dailyCard(r) {
+  const fb = reportFeedback(r);
   return `
     <div class="card report-card">
       <div class="card-top">
@@ -2548,6 +2550,11 @@ function dailyCard(r) {
       ${r.done ? `<div class="report-row"><b>오늘 한 일</b><div>${reportRich(r.done)}</div></div>` : ""}
       ${r.todo ? `<div class="report-row"><b>내일 할 일</b><div>${reportRich(r.todo)}</div></div>` : ""}
       ${r.note ? `<div class="report-row"><b>특이사항</b><div>${reportRich(r.note)}</div></div>` : ""}
+      <div class="report-feedback">
+        <label class="fb-label">💬 피드백</label>
+        <textarea class="fb-input" data-fb-id="${r.id}" rows="2" placeholder="이 보고서에 대한 피드백을 직접 입력하세요…">${UI.esc(fb)}</textarea>
+        <button class="btn xs primary fb-save" data-act="report-feedback-save" data-id="${r.id}">피드백 저장</button>
+      </div>
       <div class="card-actions">
         <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
         <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
@@ -2555,6 +2562,12 @@ function dailyCard(r) {
         <button class="btn xs danger" data-act="report-del" data-id="${r.id}">삭제</button>
       </div>
     </div>`;
+}
+
+/* 일일보고 피드백 저장 위치: daily 보고가 쓰지 않는 period 칸을 재활용
+   → 클라우드(Supabase) 스키마 변경 없이 실시간 공유됨 */
+function reportFeedback(r) {
+  return (r && isDailyReport(r) && r.period) || "";
 }
 
 /* 휴무(연차 등)인 사람의 자동 보고 카드 — 보고서 작성 없이 캘린더 연차로 자동 표시 */
@@ -3819,6 +3832,14 @@ async function handleAction(act, el) {
     case "mreport-edit": return planReportForm("monthly", find("reports"));
     case "report-submit": return openReportPreview(find("reports"));
     case "report-edit": return reportForm(find("reports"));
+    case "report-feedback-save": {
+      const ta = document.querySelector(`.fb-input[data-fb-id="${id}"]`);
+      if (ta) {
+        await Store.update("reports", id, { period: ta.value.trim() });
+        UI.toast("피드백을 저장했어요");
+      }
+      return;
+    }
     case "report-del":
       if (await UI.confirmBox("이 보고서를 삭제할까요?")) await Store.remove("reports", id);
       return;
@@ -4254,6 +4275,12 @@ function bindGlobalEvents() {
     if (e.target.classList.contains("prog-range") || e.target.classList.contains("pt-prog")) {
       applyProgressChange(e.target.getAttribute("data-id"), e.target.value);
     }
+    // 피드백 칸: 칸 밖을 누르면(blur) 자동 저장
+    if (e.target.classList.contains("fb-input")) {
+      Store.update("reports", e.target.getAttribute("data-fb-id"), {
+        period: e.target.value.trim(),
+      });
+    }
   });
 
   // 슬라이더 드래그 중 % 숫자 실시간 갱신 (저장은 change에서)
@@ -4278,9 +4305,11 @@ function bindGlobalEvents() {
     render();
   });
 
-  // Store 변경 시 재렌더 (단, 모달 열려있으면 보류)
+  // Store 변경 시 재렌더 (단, 모달 열려있거나 피드백 입력 중이면 보류)
   Store.subscribe(() => {
-    if (!document.querySelector(".modal-overlay")) render();
+    const ae = document.activeElement;
+    const editingFb = ae && ae.classList && ae.classList.contains("fb-input");
+    if (!document.querySelector(".modal-overlay") && !editingFb) render();
   });
   // 플로팅 '내 할일' 위젯도 항상 최신으로 동기화
   Store.subscribe(() => FloatTodo.update());

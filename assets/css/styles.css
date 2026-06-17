@@ -414,6 +414,24 @@ a { color: inherit; }
 .report-row { margin-top: 8px; font-size: 13px; }
 .report-row b { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
 
+/* 일일보고 피드백 칸 */
+.report-feedback {
+  margin-top: 12px; padding: 10px; border: 1px solid var(--line-2); border-radius: 10px;
+  background: var(--panel-2); display: flex; flex-direction: column; gap: 8px;
+}
+.fb-label { font-size: 12.5px; font-weight: 800; color: var(--ink-2); }
+.fb-input {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line-2); border-radius: 8px;
+  padding: 9px 11px; font-family: inherit; font-size: 14px; line-height: 1.5; resize: vertical;
+  min-height: 40px; background: #fff; color: var(--ink);
+}
+.fb-input:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
+.fb-save { align-self: flex-end; }
+@media (max-width: 600px) {
+  .fb-save { align-self: stretch; padding-top: 9px; padding-bottom: 9px; }
+  .fb-input { font-size: 16px; } /* iOS 자동 확대 방지 */
+}
+
 /* ===== 멤버 ===== */
 .member-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .member-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
