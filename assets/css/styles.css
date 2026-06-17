@@ -231,7 +231,15 @@ a { color: inherit; }
 .ptask.is-done .pt-title { text-decoration: line-through; color: var(--muted); }
 .pt-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: #94a3b8; }
 .pt-dot.status-doing { background: #f59e0b; }
+.pt-dot.status-paused { background: #a855f7; }
 .pt-dot.status-done { background: var(--ok); }
+.pt-status.status-paused { color: #7e22ce; }
+.dot.status-paused { background: #a855f7; }
+.ptask.is-paused { background: #faf5ff; }
+.ptask.is-paused .pt-title { color: #7e22ce; }
+/* 멈춤 배지 / 칸반 카드 */
+.paused-badge { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #f3e8ff; color: #7e22ce; }
+.task-card.is-paused { background: #faf5ff; border-color: #e9d5ff; }
 .pt-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 .pt-due { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .pt-due.overdue { color: var(--danger); font-weight: 700; }
@@ -313,6 +321,30 @@ a { color: inherit; }
 @media (max-width: 560px) { .goal-kanban { grid-template-columns: 1fr; } }
 
 /* ===== 캘린더 ===== */
+/* ===== 결제(지출) 일정 ===== */
+.cal-ev.is-pay { background: #fef9c3 !important; color: #854d0e !important; font-weight: 700; }
+.cal-ev.is-pay b { font-weight: 800; }
+.dd-tag.pay { background: #fef08a; color: #854d0e; }
+.pay-total { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
+.pay-total b { color: #b45309; font-size: 14px; }
+.pay-list { display: flex; flex-direction: column; gap: 12px; }
+.pay-group { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; box-shadow: var(--shadow); }
+.pay-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; background: #fffbeb; border-bottom: 1px solid var(--line); font-weight: 800; font-size: 14px; }
+.pay-group-sum { color: #b45309; font-size: 13px; font-weight: 800; }
+.pay-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.pay-row:first-child { border-top: none; }
+.pay-badge { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+.pay-badge.d { background: #dbeafe; color: #1d4ed8; }
+.pay-badge.m { background: #ede9fe; color: #6d28d9; }
+.pay-vendor { font-weight: 700; font-size: 14px; }
+.pay-amount { font-weight: 800; color: #b45309; font-size: 14px; }
+.pay-note { color: var(--muted); font-size: 12.5px; flex: 1 1 100%; }
+.pay-actions { display: flex; gap: 4px; margin-left: auto; }
+@media (max-width: 600px) {
+  .pay-total { width: 100%; margin-left: 0; }
+  .pay-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
+}
+
 .cal-highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
 .hl-box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); }
 .hl-box h4 { margin: 0 0 8px; font-size: 14px; }

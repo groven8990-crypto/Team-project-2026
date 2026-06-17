@@ -6,6 +6,7 @@ const NAV = [
   { id: "goals", label: "업무 목표", icon: "🎯" },
   { id: "docs", label: "업무 문서", icon: "📄" },
   { id: "calendar", label: "캘린더", icon: "📅" },
+  { id: "payments", label: "결제 일정", icon: "💰" },
   { id: "databoard", label: "데이터 보드", icon: "📚" },
   { id: "minutes", label: "회의록", icon: "📝" },
   { id: "kpt", label: "KPT 회고", icon: "🔁" },
@@ -18,6 +19,11 @@ const TASK_STATUS = [
   { key: "doing", label: "진행 중" },
   { key: "done", label: "완료" },
 ];
+// 'paused'(잠깐 멈춤)는 칸반 별도 컬럼은 아니고 진행 중 칸에 멈춤 배지로 표시
+const STATUS_LABEL = { todo: "할 일", doing: "진행 중", paused: "⏸ 멈춤", done: "완료" };
+function taskStatusLabel(status) {
+  return STATUS_LABEL[status] || "할 일";
+}
 
 const GOAL_STATUS = [
   { key: "planned", label: "예정", color: "#94a3b8" },
@@ -155,7 +161,7 @@ const HELP = {
       "  · 어제 이전에 완료한 일은 '🗂️ 지난 완료한 일 ▼'을 눌러 따로 모아볼 수 있어요.",
       "【전체 보기】 할 일 / 진행 중 / 완료 3단 칸반 레이아웃이에요.",
       "  · 카드의 ▶ 버튼으로 '진행 중'으로, ✓ 버튼으로 '완료'로 상태를 바꿔요.",
-      "  · 이미 진행 중이면 ✓ 버튼만 표시돼요.",
+      "  · 진행 중인 업무는 '⏸ 멈춤'으로 잠깐 멈췄다가, '▶ 재개'로 다시 진행할 수 있어요(진행률은 그대로 유지). 멈춤 업무는 진행 중 칸에 ⏸ 배지로 표시돼요.",
       "  · 완료 칸 맨 아래 '🗂️ 지난 완료한 일 ▼'으로 예전에 끝낸 업무도 다시 볼 수 있어요.",
       "우측 상단 '📌 내 할일'을 누르면 내 할일 목록이 작은 창으로 떠서 어느 페이지에서나 따라다녀요. 드래그로 옮기고, 🗗 버튼으로 새 창에 띄우면 작업표시줄에서 최소화했다가 다시 띄울 수 있어요.",
     ],
@@ -197,6 +203,17 @@ const HELP = {
       "토요일은 파란색, 일요일·공휴일은 빨간색으로 표시돼요. 대한민국 공휴일은 날짜 칸에 이름이 함께 나와요.",
       "【연차·휴무】 일정 추가 시 '휴무/부재 구분'에서 연차·반차·병가·외근 등을 고르고 대상자를 '참여자'에 넣으면, 그 날 일일보고 자동생성 시 '오늘 한 일'에 [연차]처럼 자동으로 들어가고 날짜별 취합에도 표시돼요.",
       "‹ › 화살표로 한 달씩, « » 화살표로 한 해씩 이동할 수 있어요. '오늘'을 누르면 이번 달로 돌아와요.",
+    ],
+  },
+  payments: {
+    title: "결제 일정 사용법",
+    items: [
+      "'+ 결제 건 추가'로 업체명·금액·결제일·구분(일별/월별)·세부 내역을 등록해요.",
+      "【일별 보기】 결제일 날짜별로 묶어 보여주고, 날짜마다 합계와 건수를 알려줘요.",
+      "【업체별 보기】 업체마다 묶어서 그 업체의 결제 합계와 건들을 보여줘요.",
+      "상단에 그 달 전체 결제 합계와 건수가 표시되고, ‹ › « » 로 달·연도를 이동해요.",
+      "등록한 결제 건은 캘린더에도 💰 업체·금액으로 함께 표시돼요(날짜 칸 클릭 → 그 날 결제 확인).",
+      "결제일을 바꾸려면 '수정'에서 날짜만 바꾸면 돼요. 그러면 일정이 그에 맞게 조절돼요.",
     ],
   },
   databoard: {
@@ -293,6 +310,8 @@ const App = {
     assistantMsgs: [], // 비서 대화 내역
     reportDate: null, // 취합 보기 선택 날짜
     reportCalRef: new Date(), // 취합 캘린더 기준 월
+    payView: "daily", // 결제 일정 보기: daily | monthly
+    payRef: new Date(), // 결제 일정 기준 월
   },
 };
 
@@ -406,7 +425,7 @@ function renderHome() {
   // 통계
   const counts = {
     todo: tasks.filter((t) => t.status === "todo").length,
-    doing: tasks.filter((t) => t.status === "doing").length,
+    doing: tasks.filter((t) => t.status === "doing" || t.status === "paused").length,
     done: tasks.filter((t) => t.status === "done").length,
   };
 
@@ -606,7 +625,7 @@ function renderDashboard() {
 
   const counts = {
     todo: tasks.filter((t) => t.status === "todo").length,
-    doing: tasks.filter((t) => t.status === "doing").length,
+    doing: tasks.filter((t) => t.status === "doing" || t.status === "paused").length,
     done: tasks.filter((t) => t.status === "done").length,
   };
 
@@ -650,7 +669,8 @@ function renderDashboard() {
 
   const columns = TASK_STATUS.map((col) => {
     let items = tasks
-      .filter((t) => t.status === col.key)
+      // '진행 중' 칸에는 멈춤(paused) 업무도 함께 표시(멈춤 배지로 구분)
+      .filter((t) => t.status === col.key || (col.key === "doing" && t.status === "paused"))
       .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
     let pastBlock = "";
     // 완료 칸: 오늘 완료만 기본 노출, 지난 완료는 토글로 펼치기
@@ -831,12 +851,15 @@ function personSection(name, color, memberId, tasks, isMe) {
 }
 
 function personTaskRow(t) {
-  const meta = TASK_STATUS.find((s) => s.key === t.status) || TASK_STATUS[0];
   const overdue = t.status !== "done" && t.due_date && t.due_date < UI.todayInput();
-  const next = t.status === "todo" ? "doing" : t.status === "doing" ? "done" : "todo";
-  const nextLabel = t.status === "todo" ? "▶" : t.status === "doing" ? "✓" : "↺";
+  const next =
+    t.status === "todo" ? "doing" : t.status === "doing" ? "done" : t.status === "paused" ? "doing" : "todo";
+  const nextLabel =
+    t.status === "todo" ? "▶" : t.status === "doing" ? "✓" : t.status === "paused" ? "▶" : "↺";
+  const nextTip =
+    t.status === "todo" ? "시작" : t.status === "doing" ? "완료" : t.status === "paused" ? "재개" : "되돌리기";
   return `
-    <div class="ptask ${t.status === "done" ? "is-done" : ""}">
+    <div class="ptask ${t.status === "done" ? "is-done" : ""} ${t.status === "paused" ? "is-paused" : ""}">
       <span class="pt-dot status-${t.status}"></span>
       <span class="pt-title clickable" data-act="task-detail" data-id="${t.id}">${UI.esc(t.title)}</span>
       ${
@@ -855,9 +878,14 @@ function personTaskRow(t) {
                <span class="prog-edit-num">${parseInt(t.progress) || 0}%</span>
              </span>`
       }
-      <span class="pt-status status-${t.status}">${meta.label}</span>
+      <span class="pt-status status-${t.status}">${taskStatusLabel(t.status)}</span>
       <span class="pt-actions">
-        <button class="btn xs primary" data-act="task-move" data-id="${t.id}" data-to="${next}">${nextLabel}</button>
+        <button class="btn xs primary" data-act="task-move" data-id="${t.id}" data-to="${next}" title="${nextTip}">${nextLabel}</button>
+        ${
+          t.status === "doing"
+            ? `<button class="btn xs ghost" data-act="task-move" data-id="${t.id}" data-to="paused" title="잠깐 멈춤">⏸</button>`
+            : ""
+        }
         <button class="btn xs ghost" data-act="task-edit" data-id="${t.id}">수정</button>
         <button class="btn xs danger" data-act="task-del" data-id="${t.id}">삭제</button>
       </span>
@@ -867,13 +895,15 @@ function personTaskRow(t) {
 function taskCard(t) {
   const overdue =
     t.status !== "done" && t.due_date && t.due_date < UI.todayInput();
-  const next = t.status === "todo" ? "doing" : t.status === "doing" ? "done" : "todo";
+  const next =
+    t.status === "todo" ? "doing" : t.status === "doing" ? "done" : t.status === "paused" ? "doing" : "todo";
   const nextLabel =
-    t.status === "todo" ? "▶ 시작" : t.status === "doing" ? "✓ 완료" : "↺ 되돌리기";
+    t.status === "todo" ? "▶ 시작" : t.status === "doing" ? "✓ 완료" : t.status === "paused" ? "▶ 재개" : "↺ 되돌리기";
   return `
-    <div class="card task-card ${t.status === "done" ? "is-done" : ""}">
+    <div class="card task-card ${t.status === "done" ? "is-done" : ""} ${t.status === "paused" ? "is-paused" : ""}">
       <div class="card-top">
         <strong class="clickable" data-act="task-detail" data-id="${t.id}">${UI.esc(t.title)}</strong>
+        ${t.status === "paused" ? `<span class="paused-badge">⏸ 멈춤</span>` : ""}
         ${UI.memberChip(t.assignee_id)}
       </div>
       ${t.detail ? `<p class="card-desc">${UI.nl2br(t.detail)}</p>` : ""}
@@ -901,6 +931,11 @@ function taskCard(t) {
       </div>
       <div class="card-actions">
         <button class="btn xs primary" data-act="task-move" data-id="${t.id}" data-to="${next}">${nextLabel}</button>
+        ${
+          t.status === "doing"
+            ? `<button class="btn xs ghost" data-act="task-move" data-id="${t.id}" data-to="paused" title="잠깐 멈춤">⏸ 멈춤</button>`
+            : ""
+        }
         <button class="btn xs ghost" data-act="task-edit" data-id="${t.id}">수정</button>
         <button class="btn xs danger" data-act="task-del" data-id="${t.id}">삭제</button>
       </div>
@@ -951,7 +986,7 @@ async function taskForm(existing) {
 /* 할 일 상세 보기 (읽기 전용) */
 function openTaskDetail(t) {
   if (!t) return;
-  const meta = TASK_STATUS.find((s) => s.key === t.status) || TASK_STATUS[0];
+  const meta = { label: taskStatusLabel(t.status) };
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
@@ -1473,6 +1508,7 @@ function renderCalendar() {
   const todayStr = UI.todayInput();
   const todayEvents = events
     .filter((e) => {
+      if (isPayment(e)) return false; // 결제 건은 결제 일정 탭에서 관리
       const s = e.date;
       const en = e.end_date || e.date;
       return s && todayStr >= s && todayStr <= en;
@@ -1638,6 +1674,7 @@ function openDayDetail(dateStr) {
 }
 
 function dayDetailItem(e) {
+  const pay = eventPayment(e);
   const scopes = eventScopes(e);
   const tags = scopes
     .map((s) =>
@@ -1650,11 +1687,15 @@ function dayDetailItem(e) {
     e.end_date && e.end_date !== e.date
       ? `${UI.fmtDate(e.date)} ~ ${UI.fmtDate(e.end_date)}`
       : UI.fmtDate(e.date);
+  // 결제 건은 결제 전용 액션으로 라우팅
+  const editAct = pay ? "pay-edit" : "event-edit";
+  const delAct = pay ? "pay-del" : "event-del";
   return `
     <div class="dd-item">
       <div class="dd-item-top">
-        <span class="dd-dot ${scopeClass(e)}"></span>
-        <strong>${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</strong>
+        <span class="dd-dot ${pay ? "" : scopeClass(e)}"></span>
+        <strong>${pay ? "💰 " : eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</strong>
+        ${pay ? `<span class="dd-tag pay">${UI.esc(pay.type)} ${fmtWon(pay.amount)}</span>` : ""}
         ${eventLeave(e) ? `<span class="dd-tag leave">${UI.esc(eventLeave(e))}</span>` : ""}
         ${tags}
       </div>
@@ -1669,8 +1710,8 @@ function dayDetailItem(e) {
       }
       ${e.note ? `<div class="dd-note">${UI.nl2br(e.note)}</div>` : ""}
       <div class="dd-item-actions">
-        <button class="btn xs ghost" data-act="event-edit" data-id="${e.id}">수정</button>
-        <button class="btn xs danger" data-act="event-del" data-id="${e.id}">삭제</button>
+        <button class="btn xs ghost" data-act="${editAct}" data-id="${e.id}">수정</button>
+        <button class="btn xs danger" data-act="${delAct}" data-id="${e.id}">삭제</button>
       </div>
     </div>`;
 }
@@ -1728,6 +1769,26 @@ function leaveLabelFor(memberId, dateStr) {
   return [...new Set(labels)].join("·");
 }
 
+/* ===== 결제(지출) 일정 — events에 'pay:구분:금액' 토큰으로 인코딩 저장 ===== */
+/* 결제 정보 파싱: { type:'일별'|'월별', amount:Number } 또는 null */
+function eventPayment(e) {
+  const tok = (e.scope || "")
+    .split(",")
+    .map((x) => x.trim())
+    .find((x) => x.startsWith("pay:"));
+  if (!tok) return null;
+  const parts = tok.split(":");
+  return { type: parts[1] || "일별", amount: parseInt(parts[2]) || 0 };
+}
+function isPayment(e) {
+  return !!eventPayment(e);
+}
+/* 금액 포맷: 1200000 → "1,200,000원" */
+function fmtWon(n) {
+  const v = parseInt(n) || 0;
+  return v.toLocaleString("ko-KR") + "원";
+}
+
 function calendarGrid(year, month, events) {
   const first = new Date(year, month, 1);
   const startDay = first.getDay();
@@ -1755,19 +1816,25 @@ function calendarGrid(year, month, events) {
     });
     const evHtml = dayEvents
       .slice(0, 4)
-      .map(
-        (e) =>
-          `<div class="cal-ev-wrap">
+      .map((e) => {
+        const pay = eventPayment(e);
+        if (pay) {
+          // 결제 건은 💰 업체 + 금액으로 표시, 클릭 시 결제 수정
+          return `<div class="cal-ev-wrap">
+             <div class="cal-ev is-pay" data-act="pay-edit" data-id="${e.id}" title="${UI.esc(e.title)} ${fmtWon(pay.amount)}">💰 ${UI.esc(e.title)} <b>${fmtWon(pay.amount)}</b></div>
+           </div>`;
+        }
+        return `<div class="cal-ev-wrap">
              <div class="cal-ev ${scopeClass(e)} ${eventLeave(e) ? "is-leave" : ""}" data-act="event-edit" data-id="${
-            e.id
-          }" title="${UI.esc(e.title)}">${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</div>
+          e.id
+        }" title="${UI.esc(e.title)}">${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</div>
              ${
                Array.isArray(e.participants) && e.participants.length
                  ? `<div class="cal-ev-dots">${memberDots(e.participants)}</div>`
                  : ""
              }
-           </div>`
-      )
+           </div>`;
+      })
       .join("");
     const more =
       dayEvents.length > 4
@@ -1862,6 +1929,165 @@ async function eventForm(existing, presetDate, isLeave) {
   } else {
     await Store.add("events", res);
     UI.toast("일정이 추가되었습니다");
+  }
+}
+
+/* ============ 결제(지출) 일정 ============ */
+function renderPayments() {
+  const ref = App.state.payRef;
+  const year = ref.getFullYear();
+  const month = ref.getMonth();
+  const view = App.state.payView;
+
+  // 이번 달 결제 건 (결제일이 해당 월)
+  const all = Store.list("events")
+    .map((e) => ({ e, p: eventPayment(e) }))
+    .filter((x) => x.p && belongsToMonth(x.e.date, year, month))
+    .sort((a, b) => (a.e.date || "").localeCompare(b.e.date || ""));
+
+  const monthTotal = all.reduce((s, x) => s + x.p.amount, 0);
+
+  const toggle = `
+    <div class="view-toggle">
+      <button class="vt ${view === "daily" ? "active" : ""}" data-act="pay-view" data-view="daily">📆 일별 보기</button>
+      <button class="vt ${view === "monthly" ? "active" : ""}" data-act="pay-view" data-view="monthly">🏢 업체별 보기</button>
+    </div>`;
+
+  const nav = `
+    <div class="cal-toolbar">
+      <button class="icon-btn" data-act="pay-year-prev" title="이전 연도">«</button>
+      <button class="icon-btn" data-act="pay-prev" title="이전 달">‹</button>
+      <strong>${year}년 ${month + 1}월</strong>
+      <button class="icon-btn" data-act="pay-next" title="다음 달">›</button>
+      <button class="icon-btn" data-act="pay-year-next" title="다음 연도">»</button>
+      <button class="btn ghost sm" data-act="pay-today">이번 달</button>
+      <span class="pay-total">합계 <b>${fmtWon(monthTotal)}</b> · ${all.length}건</span>
+    </div>`;
+
+  let body;
+  if (!all.length) {
+    body = `<div class="empty">${year}년 ${month + 1}월에 등록된 결제 건이 없습니다. '+ 결제 건 추가'로 등록하세요.</div>`;
+  } else if (view === "daily") {
+    // 일별: 날짜별 그룹
+    const byDate = {};
+    all.forEach((x) => ((byDate[x.e.date] = byDate[x.e.date] || []).push(x)));
+    body = Object.keys(byDate)
+      .sort()
+      .map((d) => {
+        const items = byDate[d];
+        const dayTotal = items.reduce((s, x) => s + x.p.amount, 0);
+        const wd = ["일", "월", "화", "수", "목", "금", "토"][new Date(d).getDay()] || "";
+        return `
+        <div class="pay-group">
+          <div class="pay-group-head">
+            <span>📆 ${UI.fmtDate(d)} (${wd})</span>
+            <span class="pay-group-sum">${fmtWon(dayTotal)} · ${items.length}건</span>
+          </div>
+          ${items.map((x) => payRow(x.e, x.p)).join("")}
+        </div>`;
+      })
+      .join("");
+  } else {
+    // 업체별: 업체(title)별 그룹
+    const byVendor = {};
+    all.forEach((x) => ((byVendor[x.e.title || "(미지정)"] = byVendor[x.e.title || "(미지정)"] || []).push(x)));
+    body = Object.keys(byVendor)
+      .sort((a, b) => a.localeCompare(b, "ko"))
+      .map((v) => {
+        const items = byVendor[v].sort((a, b) => (a.e.date || "").localeCompare(b.e.date || ""));
+        const vTotal = items.reduce((s, x) => s + x.p.amount, 0);
+        return `
+        <div class="pay-group">
+          <div class="pay-group-head">
+            <span>🏢 ${UI.esc(v)}</span>
+            <span class="pay-group-sum">${fmtWon(vTotal)} · ${items.length}건</span>
+          </div>
+          ${items.map((x) => payRow(x.e, x.p, true)).join("")}
+        </div>`;
+      })
+      .join("");
+  }
+
+  return `
+    <section class="view">
+      <div class="view-head">
+        <h2>💰 결제 일정</h2>
+        <button class="btn primary" data-act="pay-add">+ 결제 건 추가</button>
+      </div>
+      <p class="muted">업체별 결제(지출) 건을 일별·업체별로 정리해 봐요. 등록한 건은 캘린더에도 💰로 표시되고, 결제일을 바꿔 일정을 조절할 수 있어요.</p>
+      ${toggle}
+      ${nav}
+      <div class="pay-list">${body}</div>
+    </section>`;
+}
+
+/* 결제 건 한 줄 (vendorMode=true면 업체명 대신 날짜를 앞세움) */
+function payRow(e, p, vendorMode) {
+  const head = vendorMode ? UI.fmtDate(e.date) : UI.esc(e.title || "(업체 미지정)");
+  return `
+    <div class="pay-row">
+      <span class="pay-badge ${p.type === "월별" ? "m" : "d"}">${p.type}</span>
+      <span class="pay-vendor clickable" data-act="pay-edit" data-id="${e.id}">${head}</span>
+      <span class="pay-amount">${fmtWon(p.amount)}</span>
+      ${e.note ? `<span class="pay-note">${UI.esc(e.note)}</span>` : ""}
+      <span class="pay-actions">
+        <button class="btn xs ghost" data-act="pay-edit" data-id="${e.id}">수정</button>
+        <button class="btn xs danger" data-act="pay-del" data-id="${e.id}">삭제</button>
+      </span>
+    </div>`;
+}
+
+async function paymentForm(existing, presetDate) {
+  const p = existing ? eventPayment(existing) || { type: "일별", amount: 0 } : null;
+  const values = existing
+    ? {
+        title: existing.title,
+        date: existing.date,
+        pay_type: p.type,
+        amount: String(p.amount || ""),
+        note: existing.note || "",
+        member_id: existing.member_id || curUser(),
+      }
+    : {
+        date: presetDate || UI.todayInput(),
+        pay_type: "일별",
+        member_id: curUser(),
+      };
+  const res = await UI.formModal({
+    title: existing ? "결제 건 수정" : "결제 건 추가",
+    submitText: existing ? "수정" : "추가",
+    values,
+    fields: [
+      { name: "title", label: "업체명", type: "text", required: true, full: true },
+      { name: "amount", label: "금액 (숫자)", type: "text", required: true, placeholder: "예: 1200000" },
+      { name: "date", label: "결제일", type: "date", required: true },
+      {
+        name: "pay_type",
+        label: "결제 구분",
+        type: "select",
+        options: [
+          { value: "일별", label: "일별 결제" },
+          { value: "월별", label: "월별 결제" },
+        ],
+      },
+      { name: "note", label: "세부 내역 (품목·계좌 등)", type: "textarea", full: true },
+    ],
+  });
+  if (!res) return;
+  const amount = parseInt(String(res.amount).replace(/[^0-9]/g, "")) || 0;
+  const payload = {
+    title: (res.title || "").trim() || "(업체 미지정)",
+    date: res.date,
+    note: res.note || "",
+    member_id: res.member_id || curUser(),
+    scope: `pay:${res.pay_type || "일별"}:${amount}`,
+  };
+  if (existing) {
+    await Store.update("events", existing.id, payload);
+    UI.toast("결제 건이 수정되었습니다");
+  } else {
+    await Store.add("events", payload);
+    UI.toast("결제 건이 추가되었습니다");
   }
 }
 
@@ -2790,6 +3016,7 @@ function buildAutoReportDraft(opts) {
   // 진행 중인 일 (진행률 포함)
   const doingTasks = mineTasks.filter((t) => t.status === "doing");
   const todoTasks = mineTasks.filter((t) => t.status === "todo");
+  const pausedTasks = mineTasks.filter((t) => t.status === "paused");
   const meetingsToday = Store.list("meetings").filter((m) => m.date === today);
 
   // 오늘 한 일 줄: 제목은 - 로. 선택된 업무의 상세내용은 한 덩어리로 붙이되
@@ -2821,13 +3048,14 @@ function buildAutoReportDraft(opts) {
     .forEach((t) => doneLines.push(fmtDone(t)));
   meetingsToday.forEach((m) => doneLines.push("- (회의) " + m.title));
 
-  // 내일 할 일: '할 일(todo)' + 진행 중 업무(진행률 % 표시) — 선택된 것만
+  // 내일 할 일: '할 일(todo)' + 진행 중 업무(진행률 % 표시) + 멈춤 업무 — 선택된 것만
   const todoLines = [];
   todoTasks.filter(inTodo).forEach((t) => todoLines.push("- " + t.title));
   doingTasks.filter(inTodo).forEach((t) => {
     const p = parseInt(t.progress) || 0;
     todoLines.push("- " + t.title + (p > 0 ? ` (진행 ${p}%)` : ""));
   });
+  pausedTasks.filter(inTodo).forEach((t) => todoLines.push("- " + t.title + " (멈춤)"));
 
   return {
     member_id: me,
@@ -2854,9 +3082,10 @@ async function startAutoReport() {
   );
   const todoTasks = mine.filter((t) => t.status === "todo");
   const doingAll = mine.filter((t) => t.status === "doing");
+  const pausedAll = mine.filter((t) => t.status === "paused");
 
   const doneCands = [...doneToday, ...doingProg]; // 오늘 한 일 후보
-  const todoCands = [...todoTasks, ...doingAll]; // 내일 할 일 후보
+  const todoCands = [...todoTasks, ...doingAll, ...pausedAll]; // 내일 할 일 후보
   const detailCands = doneCands.filter((t) => (t.detail || "").trim());
 
   // 넣을 만한 업무가 전혀 없으면 빈 양식으로 바로 작성
@@ -2869,7 +3098,11 @@ async function startAutoReport() {
       ? `${t.title} · 완료`
       : `${t.title} · 진행 ${parseInt(t.progress) || 0}%`;
   const todoLabel = (t) =>
-    t.status === "doing" ? `${t.title} · 진행 ${parseInt(t.progress) || 0}%` : t.title;
+    t.status === "doing"
+      ? `${t.title} · 진행 ${parseInt(t.progress) || 0}%`
+      : t.status === "paused"
+      ? `${t.title} · ⏸ 멈춤`
+      : t.title;
 
   const fields = [];
   if (doneCands.length)
@@ -3358,6 +3591,7 @@ function render() {
     case "goals": view = renderGoals(); break;
     case "docs": view = renderDocs(); break;
     case "calendar": view = renderCalendar(); break;
+    case "payments": view = renderPayments(); break;
     case "databoard": view = renderDataboard(); break;
     case "minutes": view = renderMinutes(); break;
     case "kpt": view = renderKPT(); break;
@@ -3798,6 +4032,37 @@ async function handleAction(act, el) {
       render();
       return;
 
+    // 결제(지출) 일정
+    case "pay-add": return paymentForm();
+    case "pay-edit": return paymentForm(find("events"));
+    case "pay-del":
+      if (await UI.confirmBox("이 결제 건을 삭제할까요?")) await Store.remove("events", id);
+      return;
+    case "pay-view":
+      App.state.payView = el.getAttribute("data-view");
+      render();
+      return;
+    case "pay-prev":
+      App.state.payRef = new Date(App.state.payRef.getFullYear(), App.state.payRef.getMonth() - 1, 1);
+      render();
+      return;
+    case "pay-next":
+      App.state.payRef = new Date(App.state.payRef.getFullYear(), App.state.payRef.getMonth() + 1, 1);
+      render();
+      return;
+    case "pay-year-prev":
+      App.state.payRef = new Date(App.state.payRef.getFullYear() - 1, App.state.payRef.getMonth(), 1);
+      render();
+      return;
+    case "pay-year-next":
+      App.state.payRef = new Date(App.state.payRef.getFullYear() + 1, App.state.payRef.getMonth(), 1);
+      render();
+      return;
+    case "pay-today":
+      App.state.payRef = new Date();
+      render();
+      return;
+
     // 데이터 보드
     case "db-tab":
       App.state.databoardTab = el.getAttribute("data-tab");
@@ -3971,9 +4236,9 @@ const FloatTodo = (() => {
     return list
       .map((t) => {
         const overdue = t.due_date && t.due_date < today;
-        const next = t.status === "todo" ? "doing" : "done";
-        const icon = t.status === "todo" ? "▶" : "✓";
-        const tip = t.status === "todo" ? "진행 시작" : "완료 처리";
+        const next = t.status === "todo" || t.status === "paused" ? "doing" : "done";
+        const icon = t.status === "todo" || t.status === "paused" ? "▶" : "✓";
+        const tip = t.status === "paused" ? "재개" : t.status === "todo" ? "진행 시작" : "완료 처리";
         const exp = expanded.has(t.id);
         const prog = t.status === "done" ? 100 : parseInt(t.progress) || 0;
         const detail = exp
@@ -3997,7 +4262,7 @@ const FloatTodo = (() => {
         <div class="ft-item ${exp ? "exp" : ""}">
           <div class="ft-row">
             <button class="ft-check status-${t.status}" data-act="task-move" data-id="${t.id}" data-to="${next}" title="${tip}">${icon}</button>
-            <span class="ft-row-title" data-act="ft-expand" data-id="${t.id}" title="클릭하면 세부사항 펼치기">${UI.esc(t.title)}</span>
+            <span class="ft-row-title" data-act="ft-expand" data-id="${t.id}" title="클릭하면 세부사항 펼치기">${t.status === "paused" ? "⏸ " : ""}${UI.esc(t.title)}</span>
             ${
               t.due_date
                 ? `<span class="ft-due ${overdue ? "overdue" : ""}">${UI.fmtDate(t.due_date).slice(5)}</span>`
