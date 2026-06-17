@@ -16,6 +16,43 @@ const UI = (function () {
     return esc(s).replace(/\n/g, "<br>");
   }
 
+  /* 다양한 날짜 표기를 YYYY-MM-DD로 정규화 (못 읽으면 "") */
+  function normalizeDate(s) {
+    s = (s || "").trim();
+    if (!s) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    let m = s.match(/(\d{4})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})/);
+    if (m) return `${m[1]}-${p(m[2])}-${p(m[3])}`;
+    m = s.match(/^(\d{1,2})[.\-/월\s]+(\d{1,2})/); // MM-DD → 올해
+    if (m) return `${new Date().getFullYear()}-${p(m[1])}-${p(m[2])}`;
+    return "";
+  }
+
+  /* 붙여넣은 텍스트를 안건 표 행 배열로 변환
+     한 줄 = 한 항목. 탭 또는 | 로 칸 구분(안건 | 담당 | 기한) */
+  function parseItemsText(text) {
+    return String(text || "")
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\s+$/, ""))
+      .filter((line) => line.trim())
+      .map((line) => {
+        let cols;
+        if (line.includes("\t")) cols = line.split("\t");
+        else if (line.includes("|")) cols = line.split("|");
+        else cols = [line];
+        cols = cols.map((c) => c.trim());
+        // 맨 앞 머리표(- • ▪ * 1. 등) 제거
+        let agenda = (cols[0] || "").replace(/^([-•▪◦*·]|\d+[.)])\s*/, "").trim();
+        return {
+          agenda,
+          owner: cols[1] || "",
+          due: normalizeDate(cols[2] || ""),
+          done: false,
+        };
+      })
+      .filter((x) => x.agenda || x.owner);
+  }
+
   /* 날짜 포맷 */
   function fmtDate(iso) {
     if (!iso) return "";
@@ -190,7 +227,17 @@ const UI = (function () {
           html += `<div class="items-editor" id="${id}">
             <div class="items-head"><span>안건 및 결과</span><span>담당</span><span>기한</span><span>완료</span><span></span></div>
             ${rows.map((r) => itemRowHTML(r)).join("")}
-            <button type="button" class="btn ghost sm add-item-row" data-target="${id}">+ 행 추가</button>
+            <div class="items-tools">
+              <button type="button" class="btn ghost sm add-item-row" data-target="${id}">+ 행 추가</button>
+              <button type="button" class="btn ghost sm paste-items-toggle" data-target="${id}">📋 텍스트로 붙여넣기</button>
+            </div>
+            <div class="items-paste" hidden>
+              <textarea class="items-paste-text" rows="4" placeholder="액션아이템을 한 줄에 하나씩 붙여넣으세요.\n탭이나 | 로 칸을 나누면 담당·기한도 자동 인식돼요.\n예) 홍보물 리스트 수령 | 김수영 | 2026-06-20"></textarea>
+              <div class="items-paste-actions">
+                <button type="button" class="btn primary sm paste-items-apply" data-target="${id}">표로 변환</button>
+                <button type="button" class="btn ghost sm paste-items-cancel" data-target="${id}">닫기</button>
+              </div>
+            </div>
           </div>`;
         } else {
           const t = f.type === "date" ? "date" : f.type === "url" ? "url" : "text";
@@ -329,7 +376,50 @@ const UI = (function () {
         const add = e.target.closest(".add-item-row");
         if (add) {
           const editor = form.querySelector("#" + add.getAttribute("data-target"));
-          add.insertAdjacentHTML("beforebegin", itemRowHTML({}));
+          editor
+            .querySelector(".items-tools")
+            .insertAdjacentHTML("beforebegin", itemRowHTML({}));
+          return;
+        }
+        // 텍스트 붙여넣기 박스 토글
+        const pt = e.target.closest(".paste-items-toggle");
+        if (pt) {
+          const editor = form.querySelector("#" + pt.getAttribute("data-target"));
+          const box = editor.querySelector(".items-paste");
+          box.hidden = !box.hidden;
+          if (!box.hidden) box.querySelector(".items-paste-text").focus();
+          return;
+        }
+        const pc = e.target.closest(".paste-items-cancel");
+        if (pc) {
+          const editor = form.querySelector("#" + pc.getAttribute("data-target"));
+          const box = editor.querySelector(".items-paste");
+          box.hidden = true;
+          box.querySelector(".items-paste-text").value = "";
+          return;
+        }
+        // 붙여넣은 텍스트 → 표 행으로 변환
+        const pa = e.target.closest(".paste-items-apply");
+        if (pa) {
+          const editor = form.querySelector("#" + pa.getAttribute("data-target"));
+          const box = editor.querySelector(".items-paste");
+          const ta = box.querySelector(".items-paste-text");
+          const parsed = parseItemsText(ta.value);
+          if (!parsed.length) {
+            toast("변환할 내용이 없어요. 텍스트를 붙여넣어 주세요", "warn");
+            return;
+          }
+          // 비어있는 기본 행은 제거 후 변환된 행 추가
+          editor.querySelectorAll(".item-row").forEach((row) => {
+            const a = row.querySelector(".ir-agenda").value.trim();
+            const o = row.querySelector(".ir-owner").value.trim();
+            if (!a && !o) row.remove();
+          });
+          const tools = editor.querySelector(".items-tools");
+          parsed.forEach((r) => tools.insertAdjacentHTML("beforebegin", itemRowHTML(r)));
+          ta.value = "";
+          box.hidden = true;
+          toast(`${parsed.length}개 항목을 표로 만들었어요`);
           return;
         }
         const del = e.target.closest(".ir-del");
