@@ -42,9 +42,9 @@ const VENDORS = [
   { name: "충남마른김가공수산업협동조합", bank: "농협", account: "301-02031-2984-21", holder: "충남마른김가공수산업협동조합", terms: "즉시결제", proof: "세금계산서" },
   { name: "생선상록", bank: "농협", account: "301-0330-4278-51", holder: "생선상록(구인자)", terms: "즉시결제", proof: "계산서" },
   { name: "비셀러", bank: "기업은행", account: "05000-13379-7381", holder: "나은인터내셔널", terms: "즉시결제", proof: "현금영수증" },
-  { name: "㈜푸드엔드베스트", bank: "농협", account: "707016-55-000088", holder: "㈜푸드엔드베스트", terms: "주결제", proof: "계산서" },
-  { name: "일해수산", bank: "농협", account: "302-0984-6683-31", holder: "한상철(일해수산)", terms: "주결제", proof: "계산서" },
-  { name: "거풍푸드", bank: "광주", account: "1107-021-507090", holder: "거풍푸드", terms: "주결제", proof: "계산서" },
+  { name: "㈜푸드엔드베스트", bank: "농협", account: "707016-55-000088", holder: "㈜푸드엔드베스트", terms: "주결제", proof: "계산서", payDow: 1 },
+  { name: "일해수산", bank: "농협", account: "302-0984-6683-31", holder: "한상철(일해수산)", terms: "주결제", proof: "계산서", payDow: 5 },
+  { name: "거풍푸드", bank: "광주", account: "1107-021-507090", holder: "거풍푸드", terms: "주결제", proof: "계산서", payDow: 5 },
   { name: "최고집", bank: "농협", account: "301-0347-7156-01", holder: "농업회사법인㈜디자인", terms: "선급", proof: "계산서" },
   { name: "도매꽃이머니충전", bank: "국민", account: "401390-13-683328", holder: "도매꽃이머니충전", terms: "선급", proof: "현금영수증" },
   { name: "눈푸른우리", bank: "카카오", account: "3333-3133-01762", holder: "김귀현(눈푸른우리)", terms: "선급", proof: "계산서" },
@@ -236,7 +236,9 @@ const HELP = {
   payments: {
     title: "결제 일정 사용법",
     items: [
-      "'+ 결제 건 추가'로 업체명·금액·반복 주기·결제일(기준일)·세부 내역을 등록해요.",
+      "업체 결제조건이 달력에 자동으로 떠요 — 주결제는 '주 결제일'(매주), 15일결제는 '정산서 전달일'(매월 15일), 당월말결제는 '결제일'(말일)로 표시돼요.",
+      "즉시·익일·선급처럼 주문마다 결제하는 업체는 고정일이 없어, 달력 아래 '🧾 건별 결제 업체' 참고 카드로 모아 보여줘요.",
+      "'+ 결제 건 추가'로 개별 결제(금액 포함)도 등록할 수 있어요. 반복 주기·결제일·세부 내역을 넣어요.",
       "【반복】 '매주'로 하면 기준일의 요일마다, '매월'로 하면 기준일의 날짜마다 자동으로 반복 표시돼요. 한 번만 결제면 '한 번만'을 고르세요. (주결제 업체는 매주 그 요일에 자동으로 떠요!)",
       "달력에 날짜별 결제 합계(💰)가 보이고, 날짜 칸을 클릭하면 그 날짜로 결제를 바로 추가할 수 있어요.",
       "【일별 보기】 결제 발생 날짜별로, 【업체별 보기】 업체별로 묶어 합계·건수를 보여줘요(반복 결제는 그 달에 발생하는 만큼 펼쳐서 합산돼요).",
@@ -1845,6 +1847,30 @@ function payOccurrencesInMonth(e, p, year, month) {
   }
   return out;
 }
+
+/* 결제조건 → 마커 분류(색/라벨용): weekly | settle(정산서) | monthend | order(건별) */
+function termKind(terms) {
+  if (terms === "주결제") return "weekly";
+  if (terms === "15일결제") return "settle";
+  if (terms === "당월말결제") return "monthend";
+  return "order"; // 즉시/익일/선급 = 주문건별
+}
+/* 그 날짜에 표시할 업체 결제 마커 목록(주결제/15일/당월말 자동) */
+function vendorMarkersOn(dateStr) {
+  const t = ymd(dateStr);
+  if (!t) return [];
+  const lastDay = new Date(t.y, t.m, 0).getDate();
+  const out = [];
+  VENDORS.forEach((v) => {
+    if (v.terms === "주결제" && v.payDow != null && t.dow === v.payDow)
+      out.push({ v, kind: "weekly", label: `${v.name} 주 결제일` });
+    else if (v.terms === "15일결제" && t.d === 15)
+      out.push({ v, kind: "settle", label: `${v.name} 정산서 전달일` });
+    else if (v.terms === "당월말결제" && t.d === lastDay)
+      out.push({ v, kind: "monthend", label: `${v.name} 결제일` });
+  });
+  return out;
+}
 /* 금액 포맷: 1200000 → "1,200,000원" */
 function fmtWon(n) {
   const v = parseInt(n) || 0;
@@ -1883,14 +1909,24 @@ function paymentCalendar(year, month, payList) {
     const hol = holidayName(ds);
     const dayCls = hol || dow === 0 ? "sun" : dow === 6 ? "sat" : "";
     const amt = sumByDate[ds];
+    // 업체 결제조건 자동 마커 (주결제/15일 정산서/당월말)
+    const markers = vendorMarkersOn(ds)
+      .map((m) => `<div class="vmark ${m.kind}" title="${UI.esc(m.label)}">${UI.esc(m.label)}</div>`)
+      .join("");
     cells += `
       <div class="cal-cell pay-cell ${ds === today ? "today" : ""}" data-act="pay-add-on" data-date="${ds}" title="이 날짜에 결제 추가">
         <div class="cal-daynum ${dayCls}">${d}</div>
+        ${markers}
         ${amt ? `<div class="pay-cell-amt">💰 ${shortWon(amt)}<span class="pay-cell-cnt">${cntByDate[ds]}건</span></div>` : ""}
       </div>`;
   }
   return `<div class="cal-grid pay-cal">${wd}${cells}</div>
-    <div class="cal-legend"><span class="muted">날짜 칸을 클릭하면 그 날짜로 결제 건을 추가할 수 있어요</span></div>`;
+    <div class="cal-legend">
+      <span><i class="vdot weekly"></i>주 결제일</span>
+      <span><i class="vdot settle"></i>정산서 전달일(15일)</span>
+      <span><i class="vdot monthend"></i>당월말 결제일</span>
+      <span class="muted">날짜 칸을 클릭하면 그 날짜로 (개별) 결제를 추가할 수 있어요</span>
+    </div>`;
 }
 
 function calendarGrid(year, month, events) {
@@ -2126,15 +2162,33 @@ function renderPayments() {
         <h2>💰 결제 일정</h2>
         <button class="btn primary" data-act="pay-add">+ 결제 건 추가</button>
       </div>
-      <p class="muted">업체별 결제(지출) 건을 달력·일별·업체별로 정리해 봐요. '📇 업체 목록'에서 업체를 고르면 계좌·결제조건이 자동 입력돼요.</p>
+      <p class="muted">업체 결제조건이 달력에 자동으로 표시돼요(주 결제일 / 정산서 전달일 / 당월말 결제일). 건별(즉시·익일·선급) 업체는 아래 참고 카드로 확인하세요.</p>
       ${toggle}
       ${
         view === "vendors"
           ? ""
-          : `${nav}${paymentCalendar(year, month, all)}`
+          : `${nav}${paymentCalendar(year, month, all)}${perOrderVendorsCard()}`
       }
       <div class="pay-list">${body}</div>
     </section>`;
+}
+
+/* 건별 결제(즉시·익일·선급) 업체 참고 카드 — 고정 결제일이 없어 달력에 안 띄움 */
+function perOrderVendorsCard() {
+  const groups = ["즉시결제", "익일결제", "선급"]
+    .map((term) => {
+      const list = VENDORS.filter((v) => v.terms === term);
+      if (!list.length) return "";
+      return `<div class="po-group"><span class="po-term">${term}</span> ${list
+        .map((v) => UI.esc(v.name))
+        .join(" · ")}</div>`;
+    })
+    .join("");
+  return `
+    <div class="per-order-card">
+      <div class="po-head">🧾 건별 결제 업체 <span class="muted">(주문마다 결제 · 고정 결제일 없음)</span></div>
+      ${groups}
+    </div>`;
 }
 
 /* 업체 계좌 목록 (결제조건별 그룹) — 각 업체에서 바로 결제 추가 */

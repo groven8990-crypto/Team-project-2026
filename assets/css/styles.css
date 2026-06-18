@@ -334,9 +334,25 @@ a { color: inherit; }
 .pay-total { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
 .pay-total b { color: #b45309; font-size: 14px; }
 .pay-cal { margin-bottom: 14px; }
+.pay-cal .cal-cell { min-height: 96px; height: auto; align-content: start; }
 .pay-cal .pay-cell { cursor: pointer; }
 .pay-cal .pay-cell:hover { background: #fffbeb; }
 .pay-cell-amt { margin-top: 4px; font-size: 11px; font-weight: 800; color: #b45309; background: #fef9c3; border-radius: 6px; padding: 2px 4px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; line-height: 1.3; }
+/* 업체 결제조건 자동 마커 (달력 칸 안) */
+.vmark { margin-top: 3px; font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 5px; line-height: 1.3; border-left: 3px solid; white-space: normal; word-break: keep-all; }
+.vmark.weekly { background: #eff6ff; color: #1d4ed8; border-color: #3b82f6; }
+.vmark.settle { background: #fffbeb; color: #b45309; border-color: #f59e0b; }
+.vmark.monthend { background: #faf5ff; color: #7e22ce; border-color: #a855f7; }
+.vdot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.vdot.weekly { background: #3b82f6; }
+.vdot.settle { background: #f59e0b; }
+.vdot.monthend { background: #a855f7; }
+/* 건별 결제 업체 참고 카드 */
+.per-order-card { margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #f8fafc; }
+.po-head { font-weight: 800; font-size: 13.5px; margin-bottom: 8px; }
+.po-group { font-size: 13px; padding: 4px 0; border-top: 1px dashed var(--line); }
+.po-group:first-of-type { border-top: none; }
+.po-term { display: inline-block; min-width: 72px; font-weight: 800; color: #475569; }
 .pay-cell-cnt { color: #92857a; font-weight: 600; }
 .pay-list { display: flex; flex-direction: column; gap: 12px; }
 .pay-group { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; box-shadow: var(--shadow); }
