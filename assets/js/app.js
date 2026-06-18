@@ -35,6 +35,34 @@ const GRADES = ["미평가", "S", "A", "B", "C"];
 /* 휴무/부재 구분 (캘린더 일정에 설정 → 일일보고 자동 기입) */
 const LEAVE_TYPES = ["연차", "오전반차", "오후반차", "병가", "외근", "교육", "출장"];
 
+/* 발주처(업체) 계좌·결제조건 마스터 (업로드 엑셀 기준 2026-06-17) */
+const VENDORS = [
+  { name: "공덕농협", bank: "농협", account: "351-0852-6200-13", holder: "공덕농협농산물가공사업소", terms: "즉시결제", proof: "세금계산서" },
+  { name: "㈜렉스팜", bank: "하나", account: "128-910026-24404", holder: "㈜렉스팜", terms: "즉시결제", proof: "세금계산서" },
+  { name: "충남마른김가공수산업협동조합", bank: "농협", account: "301-02031-2984-21", holder: "충남마른김가공수산업협동조합", terms: "즉시결제", proof: "세금계산서" },
+  { name: "생선상록", bank: "농협", account: "301-0330-4278-51", holder: "생선상록(구인자)", terms: "즉시결제", proof: "계산서" },
+  { name: "비셀러", bank: "기업은행", account: "05000-13379-7381", holder: "나은인터내셔널", terms: "즉시결제", proof: "현금영수증" },
+  { name: "㈜푸드엔드베스트", bank: "농협", account: "707016-55-000088", holder: "㈜푸드엔드베스트", terms: "주결제", proof: "계산서" },
+  { name: "일해수산", bank: "농협", account: "302-0984-6683-31", holder: "한상철(일해수산)", terms: "주결제", proof: "계산서" },
+  { name: "거풍푸드", bank: "광주", account: "1107-021-507090", holder: "거풍푸드", terms: "주결제", proof: "계산서" },
+  { name: "최고집", bank: "농협", account: "301-0347-7156-01", holder: "농업회사법인㈜디자인", terms: "선급", proof: "계산서" },
+  { name: "도매꽃이머니충전", bank: "국민", account: "401390-13-683328", holder: "도매꽃이머니충전", terms: "선급", proof: "현금영수증" },
+  { name: "눈푸른우리", bank: "카카오", account: "3333-3133-01762", holder: "김귀현(눈푸른우리)", terms: "선급", proof: "계산서" },
+  { name: "십일번가(주)", bank: "기업은행", account: "593-00324-197778", holder: "십일번가(주)", terms: "선급", proof: "세금계산서" },
+  { name: "한미당식품(다모아식품)", bank: "하나은행", account: "646-910094-04705", holder: "박미숙", terms: "15일결제", proof: "세금계산서" },
+  { name: "일비", bank: "신협", account: "131-021-728087", holder: "주식회사 일비", terms: "15일결제", proof: "계산서" },
+  { name: "해담별", bank: "기업은행", account: "052-120877-04-015", holder: "주식회사 해담별", terms: "15일결제", proof: "계산서" },
+  { name: "남부파머스", bank: "농협은행", account: "301-2021-0226-31", holder: "농업회사법인 남부파머스", terms: "당월말결제", proof: "계산서" },
+  { name: "동일", bank: "농협은행", account: "355-0022-2153-53", holder: "농업회사법인 주식회사 동일", terms: "익일결제", proof: "계산서" },
+];
+const VENDOR_TERM_ORDER = ["즉시결제", "주결제", "선급", "15일결제", "당월말결제", "익일결제"];
+/* 결제조건 → 반복 주기 */
+function termToRecur(terms) {
+  if (terms === "주결제") return "weekly";
+  if (terms === "15일결제" || terms === "당월말결제") return "monthly";
+  return "once";
+}
+
 /* 대한민국 공휴일 (대체공휴일·임시공휴일 포함). 음력 기반 날짜는 연도별로 직접 기재 */
 const HOLIDAYS = {
   // 2025
@@ -2032,6 +2060,7 @@ function renderPayments() {
     <div class="view-toggle">
       <button class="vt ${view === "daily" ? "active" : ""}" data-act="pay-view" data-view="daily">📆 일별 보기</button>
       <button class="vt ${view === "monthly" ? "active" : ""}" data-act="pay-view" data-view="monthly">🏢 업체별 보기</button>
+      <button class="vt ${view === "vendors" ? "active" : ""}" data-act="pay-view" data-view="vendors">📇 업체 목록</button>
     </div>`;
 
   const nav = `
@@ -2046,8 +2075,10 @@ function renderPayments() {
     </div>`;
 
   let body;
-  if (!all.length) {
-    body = `<div class="empty">${year}년 ${month + 1}월에 등록된 결제 건이 없습니다. '+ 결제 건 추가'로 등록하세요.</div>`;
+  if (view === "vendors") {
+    body = vendorListHTML();
+  } else if (!all.length) {
+    body = `<div class="empty">${year}년 ${month + 1}월에 등록된 결제 건이 없습니다. '+ 결제 건 추가'로 등록하거나, '📇 업체 목록'에서 업체를 골라 추가하세요.</div>`;
   } else if (view === "daily") {
     // 일별: 발생 날짜별 그룹
     const byDate = {};
@@ -2095,12 +2126,46 @@ function renderPayments() {
         <h2>💰 결제 일정</h2>
         <button class="btn primary" data-act="pay-add">+ 결제 건 추가</button>
       </div>
-      <p class="muted">업체별 결제(지출) 건을 달력·일별·업체별로 정리해 봐요. 날짜 칸을 클릭하면 그 날짜로 결제를 추가하고, 결제일을 바꿔 일정을 조절할 수 있어요.</p>
-      ${nav}
-      ${paymentCalendar(year, month, all)}
+      <p class="muted">업체별 결제(지출) 건을 달력·일별·업체별로 정리해 봐요. '📇 업체 목록'에서 업체를 고르면 계좌·결제조건이 자동 입력돼요.</p>
       ${toggle}
+      ${
+        view === "vendors"
+          ? ""
+          : `${nav}${paymentCalendar(year, month, all)}`
+      }
       <div class="pay-list">${body}</div>
     </section>`;
+}
+
+/* 업체 계좌 목록 (결제조건별 그룹) — 각 업체에서 바로 결제 추가 */
+function vendorListHTML() {
+  const groups = VENDOR_TERM_ORDER.map((term) => {
+    const list = VENDORS.map((v, i) => ({ v, i })).filter((x) => x.v.terms === term);
+    if (!list.length) return "";
+    const recur = termToRecur(term);
+    const badgeCls = recur === "monthly" ? "m" : recur === "weekly" ? "w" : "o";
+    return `
+      <div class="pay-group">
+        <div class="pay-group-head">
+          <span>◆ ${term} <span class="pay-badge ${badgeCls}">${payRecurLabel(recur)}</span></span>
+          <span class="pay-group-sum">${list.length}개 업체</span>
+        </div>
+        ${list
+          .map(
+            (x) => `
+          <div class="vendor-row">
+            <div class="vendor-info">
+              <strong>${UI.esc(x.v.name)}</strong>
+              <div class="vendor-acct">🏦 ${UI.esc(x.v.bank)} ${UI.esc(x.v.account)} <span class="muted">(${UI.esc(x.v.holder)})</span></div>
+              <div class="vendor-proof muted">증빙: ${UI.esc(x.v.proof)}</div>
+            </div>
+            <button class="btn xs primary" data-act="pay-add-vendor" data-idx="${x.i}">+ 결제 추가</button>
+          </div>`
+          )
+          .join("")}
+      </div>`;
+  }).join("");
+  return `<p class="muted" style="margin-bottom:10px">총 ${VENDORS.length}개 업체 · 결제조건별 정리 (업로드 자료 기준)</p>${groups}`;
 }
 
 /* 결제 건 한 줄 (occDate가 주어지면 업체명 대신 그 발생 날짜를 앞세움) */
@@ -2120,22 +2185,39 @@ function payRow(e, p, occDate) {
     </div>`;
 }
 
-async function paymentForm(existing, presetDate) {
+async function paymentForm(existing, presetDate, vendor) {
   const p = existing ? eventPayment(existing) || { recur: "once", amount: 0 } : null;
-  const values = existing
-    ? {
-        title: existing.title,
-        date: existing.date,
-        recur: p.recur,
-        amount: String(p.amount || ""),
-        note: existing.note || "",
-        member_id: existing.member_id || curUser(),
-      }
-    : {
-        date: presetDate || UI.todayInput(),
-        recur: "monthly",
-        member_id: curUser(),
-      };
+  let values;
+  if (existing) {
+    values = {
+      title: existing.title,
+      date: existing.date,
+      recur: p.recur,
+      amount: String(p.amount || ""),
+      note: existing.note || "",
+      member_id: existing.member_id || curUser(),
+    };
+  } else if (vendor) {
+    // 업체 목록에서 선택 → 계좌·결제조건 자동 입력
+    const recur = termToRecur(vendor.terms);
+    let date = UI.todayInput();
+    const now = new Date();
+    if (vendor.terms === "15일결제") date = fmtYMD(new Date(now.getFullYear(), now.getMonth(), 15));
+    else if (vendor.terms === "당월말결제") date = fmtYMD(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    values = {
+      title: vendor.name,
+      date,
+      recur,
+      member_id: curUser(),
+      note: `${vendor.bank} ${vendor.account} (${vendor.holder})\n증빙: ${vendor.proof} · 조건: ${vendor.terms}`,
+    };
+  } else {
+    values = {
+      date: presetDate || UI.todayInput(),
+      recur: "monthly",
+      member_id: curUser(),
+    };
+  }
   const res = await UI.formModal({
     title: existing ? "결제 건 수정" : "결제 건 추가",
     submitText: existing ? "수정" : "추가",
@@ -4112,6 +4194,8 @@ async function handleAction(act, el) {
     // 결제(지출) 일정
     case "pay-add": return paymentForm();
     case "pay-add-on": return paymentForm(null, el.getAttribute("data-date"));
+    case "pay-add-vendor":
+      return paymentForm(null, null, VENDORS[parseInt(el.getAttribute("data-idx"))]);
     case "pay-edit": return paymentForm(find("events"));
     case "pay-del":
       if (await UI.confirmBox("이 결제 건을 삭제할까요?")) await Store.remove("events", id);
