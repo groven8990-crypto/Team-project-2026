@@ -21,10 +21,27 @@ const UI = (function () {
     s = (s || "").trim();
     if (!s) return "";
     const p = (n) => String(n).padStart(2, "0");
+    const fmt = (dt) => `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+    // 상대 표현 키워드
+    const today = new Date();
+    const addDays = (n) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + n);
+      return d;
+    };
+    if (/^(오늘|당일|금일|즉시|바로)/.test(s)) return fmt(today);
+    if (/^(내일|익일)/.test(s)) return fmt(addDays(1));
+    if (/^(모레)/.test(s)) return fmt(addDays(2));
+    if (/(금주|이번\s*주|이번주|주중|이주|이번주말|금주말)/.test(s)) {
+      // 이번 주 금요일
+      const d = new Date(today);
+      d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));
+      return fmt(d);
+    }
     let m = s.match(/(\d{4})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})/);
     if (m) return `${m[1]}-${p(m[2])}-${p(m[3])}`;
     m = s.match(/^(\d{1,2})[.\-/월\s]+(\d{1,2})/); // MM-DD → 올해
-    if (m) return `${new Date().getFullYear()}-${p(m[1])}-${p(m[2])}`;
+    if (m) return `${today.getFullYear()}-${p(m[1])}-${p(m[2])}`;
     return "";
   }
 

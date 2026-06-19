@@ -286,7 +286,8 @@ const HELP = {
     items: [
       "'+ 회의록 작성'으로 회의 구분·일시·장소·참석자·비고를 기록해요.",
       "【안건 및 결과 표】 안건마다 담당자·기한·완료 여부를 행으로 추가할 수 있어요. '+ 행 추가'로 늘려요.",
-      "  · '📋 텍스트로 붙여넣기'를 누르고 액션아이템을 한 줄에 하나씩 붙여넣으면 자동으로 표 행이 만들어져요. 탭이나 | 로 칸을 나누면 담당·기한도 함께 인식돼요(예: 홍보물 리스트 수령 | 김수영 | 2026-06-20).",
+      "  · '📋 텍스트로 붙여넣기'를 누르고 액션아이템을 한 줄에 하나씩 붙여넣으면 자동으로 표 행이 만들어져요. 탭이나 | 로 칸을 나누면 담당·기한도 함께 인식돼요(예: 홍보물 리스트 수령 | 김수영 | 2026-06-20). 기한은 '오늘·내일·금주' 같은 말도 날짜로 바꿔줘요.",
+      "  · 회의록 카드의 '📋 할일로 보내기'를 누르면 액션아이템이 할일 대시보드에 자동으로 추가돼요. 담당자 이름은 멤버와 자동 매칭되고, 기한은 마감일로 들어가요(이미 보낸 항목은 '📋 할일' 표시로 중복 방지).",
       "회의록 카드의 '완료' 칸 ⬜/✅를 바로 클릭하면 수정 화면에 들어가지 않고도 처리 여부가 즉시 토글돼요.",
       "F/u(후속 과제) 완료 체크박스로 회의 후 후속 과제 처리 여부를 관리해요.",
       "'📑 복제'로 같은 양식의 회의록을 빠르게 재사용할 수 있어요.",
@@ -2705,7 +2706,7 @@ function meetingItemsTable(items, meetingId) {
       return `
       <tr class="${it.done ? "done" : ""}">
         <td class="ta-c">${check}</td>
-        <td>${UI.esc(it.agenda || "")}</td>
+        <td>${UI.esc(it.agenda || "")}${it.sent ? ` <span class="mi-sent" title="할일로 보냄">📋 할일</span>` : ""}</td>
         <td class="ta-c">${it.owner ? UI.esc(it.owner) : "-"}</td>
         <td class="ta-c nowrap">${it.due ? UI.fmtDate(it.due) : "-"}</td>
       </tr>`;
@@ -2739,12 +2740,63 @@ function meetingCard(m) {
       ${m.remarks ? `<div class="meeting-row"><b>비고</b><div>${UI.nl2br(m.remarks)}</div></div>` : ""}
       <div class="card-meta">작성: ${UI.memberChip(m.member_id)}</div>
       <div class="card-actions">
+        ${
+          Array.isArray(m.items) && m.items.some((it) => (it.agenda || "").trim())
+            ? `<button class="btn xs primary" data-act="meeting-to-tasks" data-id="${m.id}">📋 할일로 보내기</button>`
+            : ""
+        }
         <button class="btn xs ghost" data-act="meeting-image" data-id="${m.id}">🖼️ 이미지</button>
         <button class="btn xs ghost" data-act="meeting-duplicate" data-id="${m.id}">📑 복제</button>
         <button class="btn xs ghost" data-act="meeting-edit" data-id="${m.id}">수정</button>
         <button class="btn xs danger" data-act="meeting-del" data-id="${m.id}">삭제</button>
       </div>
     </div>`;
+}
+
+/* 담당자 텍스트(예: '김수영 사원') → 멤버 id 매칭 (직급 제거 후 이름 매칭) */
+function matchMemberByName(owner) {
+  const raw = (owner || "").trim();
+  if (!raw) return "";
+  const cleaned = raw
+    .replace(/(사원|주임|대리|과장|차장|부장|팀장|실장|이사|대표이사|대표|사장|전무|상무|선임|책임|수석|님)/g, "")
+    .trim();
+  const members = Store.list("members");
+  let m = members.find((x) => x.name === cleaned);
+  if (m) return m.id;
+  m = members.find((x) => x.name && (cleaned.includes(x.name) || raw.includes(x.name)));
+  return m ? m.id : "";
+}
+
+/* 회의록 액션아이템 → 할일로 추가 (이미 보낸 항목은 건너뜀) */
+async function meetingToTasks(meeting) {
+  if (!meeting || !Array.isArray(meeting.items)) return;
+  const targets = meeting.items
+    .map((it, i) => ({ it, i }))
+    .filter((x) => (x.it.agenda || "").trim() && !x.it.done && !x.it.sent);
+  if (!targets.length) {
+    UI.toast("할일로 보낼 새 액션아이템이 없어요(이미 보냈거나 완료됨)", "warn");
+    return;
+  }
+  if (!(await UI.confirmBox(`액션아이템 ${targets.length}개를 할일로 추가할까요?`))) return;
+  const sentIdx = new Set(targets.map((x) => x.i));
+  for (const { it } of targets) {
+    const assignee = matchMemberByName(it.owner);
+    const ref = `회의: ${meeting.title || ""}${meeting.date ? " (" + UI.fmtDate(meeting.date) + ")" : ""}`;
+    const detail = !assignee && it.owner ? `${ref}\n담당(미매칭): ${it.owner}` : ref;
+    await Store.add("tasks", {
+      title: it.agenda.trim(),
+      assignee_id: assignee,
+      due_date: /^\d{4}-\d{2}-\d{2}$/.test(it.due || "") ? it.due : "",
+      status: "todo",
+      detail,
+    });
+  }
+  // 보낸 항목 표시(중복 방지)
+  const newItems = meeting.items.map((it, i) =>
+    sentIdx.has(i) ? { ...it, sent: true } : it
+  );
+  await Store.update("meetings", meeting.id, { items: newItems });
+  UI.toast(`${targets.length}개를 할일로 추가했어요`);
 }
 
 /* 회의록 제출/저장용 시트 (PNG 캡처 대상) */
@@ -4414,6 +4466,7 @@ async function handleAction(act, el) {
     case "meeting-add": return meetingForm();
     case "meeting-edit": return meetingForm(find("meetings"));
     case "meeting-duplicate": return duplicateMeeting(id);
+    case "meeting-to-tasks": return meetingToTasks(find("meetings"));
     case "meeting-item-toggle": {
       const m = find("meetings");
       if (!m || !Array.isArray(m.items)) return;
