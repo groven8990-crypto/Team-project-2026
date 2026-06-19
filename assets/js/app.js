@@ -576,9 +576,11 @@ function renderHome() {
   const meetingsBody = recentMeetings.length
     ? `<div class="mini-list">${recentMeetings
         .map(
-          (m) => `<div class="mini-row">
+          (m) => `<div class="mini-row" title="${UI.esc(m.title || "")}">
             <span class="mini-date">${UI.fmtDate(m.date)}</span>
-            <span class="mini-title">${UI.esc(m.title)}</span>
+            <span class="mini-title">${UI.esc(
+              (m.title || "").length > 24 ? (m.title || "").slice(0, 24) + "…" : m.title || ""
+            )}</span>
           </div>`
         )
         .join("")}</div>`

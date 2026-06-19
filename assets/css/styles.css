@@ -177,7 +177,7 @@ a { color: inherit; }
 .mini-list { display: flex; flex-direction: column; }
 .mini-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
 .mini-row:last-child { border-bottom: none; }
-.mini-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-date { font-size: 12px; font-weight: 700; color: var(--brand); white-space: nowrap; }
 .mini-due { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .mini-due.overdue { color: var(--danger); font-weight: 700; }
