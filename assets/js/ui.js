@@ -45,6 +45,57 @@ const UI = (function () {
     return "";
   }
 
+  /* Tesseract.js(OCR) 라이브러리 지연 로드 */
+  function ensureTesseract() {
+    if (window.Tesseract) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("OCR 라이브러리 로드 실패"));
+      document.head.appendChild(s);
+    });
+  }
+
+  /* 사진 선택 → OCR로 글자 인식 → 붙여넣기 칸에 채워줌 */
+  function pickImageAndOCR(editor, btn) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const box = editor.querySelector(".items-paste");
+      const ta = box.querySelector(".items-paste-text");
+      box.hidden = false;
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "글자 인식 중… (처음엔 좀 걸려요)";
+      let url;
+      try {
+        await ensureTesseract();
+        url = URL.createObjectURL(file);
+        const { data } = await window.Tesseract.recognize(url, "kor+eng");
+        const text = ((data && data.text) || "").replace(/[ \t]+\n/g, "\n").trim();
+        if (!text) {
+          toast("글자를 찾지 못했어요. 더 선명한 사진으로 시도해보세요", "warn");
+        } else {
+          ta.value = (ta.value ? ta.value.replace(/\s*$/, "") + "\n" : "") + text;
+          ta.focus();
+          toast("글자를 읽었어요. 칸(|)·줄을 다듬고 '표로 변환'을 누르세요");
+        }
+      } catch (err) {
+        console.error(err);
+        toast("이미지 글자 인식에 실패했어요", "warn");
+      } finally {
+        if (url) URL.revokeObjectURL(url);
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    };
+    input.click();
+  }
+
   /* 붙여넣은 텍스트를 안건 표 행 배열로 변환
      한 줄 = 한 항목. 탭 또는 | 로 칸 구분(안건 | 담당 | 기한) */
   function parseItemsText(text) {
@@ -247,6 +298,7 @@ const UI = (function () {
             <div class="items-tools">
               <button type="button" class="btn ghost sm add-item-row" data-target="${id}">+ 행 추가</button>
               <button type="button" class="btn ghost sm paste-items-toggle" data-target="${id}">📋 텍스트로 붙여넣기</button>
+              <button type="button" class="btn ghost sm ocr-items" data-target="${id}">🖼️ 사진에서 가져오기</button>
             </div>
             <div class="items-paste" hidden>
               <textarea class="items-paste-text" rows="4" placeholder="액션아이템을 한 줄에 하나씩 붙여넣으세요.\n탭이나 | 로 칸을 나누면 담당·기한도 자동 인식돼요.\n예) 홍보물 리스트 수령 | 김수영 | 2026-06-20"></textarea>
@@ -396,6 +448,13 @@ const UI = (function () {
           editor
             .querySelector(".items-tools")
             .insertAdjacentHTML("beforebegin", itemRowHTML({}));
+          return;
+        }
+        // 사진에서 글자 가져오기 (OCR)
+        const oc = e.target.closest(".ocr-items");
+        if (oc) {
+          const editor = form.querySelector("#" + oc.getAttribute("data-target"));
+          pickImageAndOCR(editor, oc);
           return;
         }
         // 텍스트 붙여넣기 박스 토글
