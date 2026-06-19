@@ -46,28 +46,38 @@ const UI = (function () {
   }
 
   /* 붙여넣은 텍스트를 안건 표 행 배열로 변환
-     한 줄 = 한 항목. 탭 또는 | 로 칸 구분(안건 | 담당 | 기한) */
+     한 줄 = 한 항목. 탭 또는 | 로 칸 구분. 맨 앞 'No.' 번호열·헤더 줄 자동 처리 */
   function parseItemsText(text) {
-    return String(text || "")
+    const rows = [];
+    String(text || "")
       .split(/\r?\n/)
-      .map((line) => line.replace(/\s+$/, ""))
-      .filter((line) => line.trim())
-      .map((line) => {
+      .forEach((raw) => {
+        const line = raw.replace(/\s+$/, "");
+        if (!line.trim()) return;
         let cols;
         if (line.includes("\t")) cols = line.split("\t");
         else if (line.includes("|")) cols = line.split("|");
         else cols = [line];
-        cols = cols.map((c) => c.trim());
-        // 맨 앞 머리표(- • ▪ * 1. 등) 제거
-        let agenda = (cols[0] || "").replace(/^([-•▪◦*·]|\d+[.)])\s*/, "").trim();
-        return {
+        cols = cols.map((c) => c.trim()).filter((c, i) => c !== "" || i === 0);
+        // 헤더 줄(예: No. 내용 담당자 기한) 건너뛰기
+        const norm = cols.map((c) => c.replace(/\s/g, ""));
+        const hasOwnerHdr = norm.some((c) => /^(담당자?|담당부서)$/.test(c));
+        const hasDueHdr = norm.some((c) => /^(기한|마감일?|일정|완료일?)$/.test(c));
+        const hasContHdr = norm.some((c) => /^(no\.?|번호|순번|내용|안건|안건및결과|항목|업무)$/i.test(c));
+        if ((hasOwnerHdr || hasDueHdr) && hasContHdr) return;
+        // 맨 앞이 순번(숫자)만 있는 칸이면 제거 (No. 열)
+        if (cols.length >= 2 && /^\d+\.?$/.test(cols[0])) cols = cols.slice(1);
+        // 안건 머리표(- • 1. 등) 제거
+        const agenda = (cols[0] || "").replace(/^([-•▪◦*·]|\d+[.)])\s*/, "").trim();
+        if (!agenda && !(cols[1] || "").trim()) return;
+        rows.push({
           agenda,
-          owner: cols[1] || "",
+          owner: (cols[1] || "").trim(),
           due: normalizeDate(cols[2] || ""),
           done: false,
-        };
-      })
-      .filter((x) => x.agenda || x.owner);
+        });
+      });
+    return rows.filter((x) => x.agenda || x.owner);
   }
 
   /* 날짜 포맷 */
@@ -450,6 +460,28 @@ const UI = (function () {
           picker.querySelectorAll(".swatch").forEach((s) => s.classList.remove("active"));
           sw.classList.add("active");
         }
+      });
+
+      // 안건 칸에 표(여러 줄/탭/|)를 붙여넣으면 자동으로 여러 행으로 변환
+      form.addEventListener("paste", (e) => {
+        const inp = e.target.closest(".ir-agenda");
+        if (!inp) return;
+        const cd = e.clipboardData || window.clipboardData;
+        const text = cd ? cd.getData("text") : "";
+        if (!text || !/[\n\t|]/.test(text)) return; // 한 칸짜리면 그냥 붙여넣기
+        e.preventDefault();
+        const parsed = parseItemsText(text);
+        if (!parsed.length) return;
+        const editor = inp.closest(".items-editor");
+        // 비어있는 행 제거 후 변환된 행 추가
+        editor.querySelectorAll(".item-row").forEach((row) => {
+          const a = row.querySelector(".ir-agenda").value.trim();
+          const o = row.querySelector(".ir-owner").value.trim();
+          if (!a && !o) row.remove();
+        });
+        const tools = editor.querySelector(".items-tools");
+        parsed.forEach((r) => tools.insertAdjacentHTML("beforebegin", itemRowHTML(r)));
+        toast(`${parsed.length}개 항목을 표로 만들었어요`);
       });
 
       // 참여자 검색 필터
