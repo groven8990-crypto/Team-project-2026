@@ -56,6 +56,30 @@ const VENDORS = [
   { name: "동일", bank: "농협은행", account: "355-0022-2153-53", holder: "농업회사법인 주식회사 동일", terms: "익일결제", proof: "계산서" },
 ];
 const VENDOR_TERM_ORDER = ["즉시결제", "주결제", "선급", "15일결제", "당월말결제", "익일결제"];
+/* 업체 목록은 docs에 JSON으로 저장(팀 공유). 없으면 하드코딩 기본값 사용 */
+const VENDOR_DOC_TITLE = "__vendor_master__";
+function getVendors() {
+  const rec = Store.list("docs").find((d) => d.title === VENDOR_DOC_TITLE);
+  if (rec && rec.body) {
+    try {
+      const arr = JSON.parse(rec.body);
+      if (Array.isArray(arr)) return arr;
+    } catch (e) {}
+  }
+  return VENDORS;
+}
+async function saveVendors(list) {
+  const rec = Store.list("docs").find((d) => d.title === VENDOR_DOC_TITLE);
+  const body = JSON.stringify(list);
+  if (rec) await Store.update("docs", rec.id, { body });
+  else
+    await Store.add("docs", {
+      title: VENDOR_DOC_TITLE,
+      category: "__system__",
+      body,
+      is_template: false,
+    });
+}
 /* 결제조건 → 반복 주기 */
 function termToRecur(terms) {
   if (terms === "주결제") return "weekly";
@@ -1328,7 +1352,7 @@ function docMatches(d, q) {
 
 function docTreeHTML() {
   const q = App.state.docSearch;
-  const all = Store.list("docs");
+  const all = Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE);
   const docs = all.filter((d) => !d.is_template && docMatches(d, q));
   const templates = all.filter((d) => d.is_template && docMatches(d, q));
 
@@ -1383,7 +1407,7 @@ function docTreeHTML() {
 }
 
 function docMainHTML() {
-  const docs = Store.list("docs");
+  const docs = Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE);
   if (!docs.length) {
     return `<div class="doc-empty">
       <div class="doc-empty-icon">📄</div>
@@ -1453,7 +1477,12 @@ async function docForm(existing, useTemplate) {
   };
   // 기존 카테고리 추천 목록
   const cats = Array.from(
-    new Set(Store.list("docs").map((d) => d.category).filter(Boolean))
+    new Set(
+      Store.list("docs")
+        .filter((d) => d.title !== VENDOR_DOC_TITLE)
+        .map((d) => d.category)
+        .filter(Boolean)
+    )
   );
   const res = await UI.formModal({
     title: existing ? "문서 수정" : useTemplate ? "양식으로 새 문서" : "새 문서",
@@ -1861,7 +1890,7 @@ function vendorMarkersOn(dateStr) {
   if (!t) return [];
   const lastDay = new Date(t.y, t.m, 0).getDate();
   const out = [];
-  VENDORS.forEach((v) => {
+  getVendors().forEach((v) => {
     if (v.terms === "주결제" && v.payDow != null && t.dow === v.payDow)
       out.push({ v, kind: "weekly", label: `${v.name} 주 결제일` });
     else if (v.terms === "15일결제" && (t.d === 15 || t.d === lastDay))
@@ -2177,7 +2206,7 @@ function renderPayments() {
 function perOrderVendorsCard() {
   const groups = ["즉시결제", "익일결제", "선급"]
     .map((term) => {
-      const list = VENDORS.filter((v) => v.terms === term);
+      const list = getVendors().filter((v) => v.terms === term);
       if (!list.length) return "";
       return `<div class="po-group"><span class="po-term">${term}</span> ${list
         .map((v) => UI.esc(v.name))
@@ -2191,10 +2220,12 @@ function perOrderVendorsCard() {
     </div>`;
 }
 
-/* 업체 계좌 목록 (결제조건별 그룹) — 각 업체에서 바로 결제 추가 */
+/* 업체 계좌 목록 (결제조건별 그룹) — 각 업체에서 바로 결제 추가 / 수정·삭제 */
 function vendorListHTML() {
+  const vendors = getVendors();
+  const WD = ["일", "월", "화", "수", "목", "금", "토"];
   const groups = VENDOR_TERM_ORDER.map((term) => {
-    const list = VENDORS.map((v, i) => ({ v, i })).filter((x) => x.v.terms === term);
+    const list = vendors.map((v, i) => ({ v, i })).filter((x) => x.v.terms === term);
     if (!list.length) return "";
     const recur = termToRecur(term);
     const badgeCls = recur === "monthly" ? "m" : recur === "weekly" ? "w" : "o";
@@ -2209,17 +2240,92 @@ function vendorListHTML() {
             (x) => `
           <div class="vendor-row">
             <div class="vendor-info">
-              <strong>${UI.esc(x.v.name)}</strong>
-              <div class="vendor-acct">🏦 ${UI.esc(x.v.bank)} ${UI.esc(x.v.account)} <span class="muted">(${UI.esc(x.v.holder)})</span></div>
-              <div class="vendor-proof muted">증빙: ${UI.esc(x.v.proof)}</div>
+              <strong>${UI.esc(x.v.name)}</strong>${
+              x.v.terms === "주결제" && x.v.payDow != null
+                ? ` <span class="vendor-dow">매주 ${WD[x.v.payDow]}요일</span>`
+                : ""
+            }
+              <div class="vendor-acct">🏦 ${UI.esc(x.v.bank || "")} ${UI.esc(x.v.account || "")} <span class="muted">(${UI.esc(x.v.holder || "")})</span></div>
+              <div class="vendor-proof muted">증빙: ${UI.esc(x.v.proof || "-")}</div>
             </div>
-            <button class="btn xs primary" data-act="pay-add-vendor" data-idx="${x.i}">+ 결제 추가</button>
+            <div class="vendor-btns">
+              <button class="btn xs primary" data-act="pay-add-vendor" data-idx="${x.i}">+ 결제</button>
+              <button class="btn xs ghost" data-act="vendor-edit" data-idx="${x.i}">수정</button>
+              <button class="btn xs danger" data-act="vendor-del" data-idx="${x.i}">삭제</button>
+            </div>
           </div>`
           )
           .join("")}
       </div>`;
   }).join("");
-  return `<p class="muted" style="margin-bottom:10px">총 ${VENDORS.length}개 업체 · 결제조건별 정리 (업로드 자료 기준)</p>${groups}`;
+  return `
+    <div class="vendor-listhead">
+      <p class="muted">총 ${vendors.length}개 업체 · 결제조건별 정리 — 이름·계좌·결제조건을 직접 수정할 수 있어요</p>
+      <button class="btn primary sm" data-act="vendor-add">+ 업체 추가</button>
+    </div>
+    ${groups}`;
+}
+
+/* 업체 추가/수정 폼 (idx=null이면 신규) */
+async function vendorForm(idx) {
+  const vendors = getVendors().map((v) => ({ ...v }));
+  const existing = idx != null ? vendors[idx] : null;
+  const values = existing || { terms: "즉시결제", payDow: "" };
+  const res = await UI.formModal({
+    title: existing ? "업체 수정" : "업체 추가",
+    submitText: existing ? "수정" : "추가",
+    values: { ...values, payDow: values.payDow == null ? "" : String(values.payDow) },
+    fields: [
+      { name: "name", label: "업체명", type: "text", required: true, full: true },
+      { name: "bank", label: "은행" },
+      { name: "account", label: "계좌번호" },
+      { name: "holder", label: "예금주", full: true },
+      {
+        name: "terms",
+        label: "결제조건",
+        type: "select",
+        options: VENDOR_TERM_ORDER.map((t) => ({ value: t, label: t })),
+      },
+      {
+        name: "proof",
+        label: "증빙",
+        type: "select",
+        options: ["세금계산서", "계산서", "현금영수증", "없음"].map((t) => ({ value: t, label: t })),
+      },
+      {
+        name: "payDow",
+        label: "주 결제 요일 (주결제만)",
+        type: "select",
+        options: [
+          { value: "", label: "지정 안함" },
+          ...["일", "월", "화", "수", "목", "금", "토"].map((d, i) => ({ value: String(i), label: d + "요일" })),
+        ],
+      },
+    ],
+  });
+  if (!res) return;
+  const v = {
+    name: (res.name || "").trim(),
+    bank: (res.bank || "").trim(),
+    account: (res.account || "").trim(),
+    holder: (res.holder || "").trim(),
+    terms: res.terms || "즉시결제",
+    proof: res.proof || "없음",
+  };
+  if (res.terms === "주결제" && res.payDow !== "") v.payDow = parseInt(res.payDow);
+  if (existing) vendors[idx] = v;
+  else vendors.push(v);
+  await saveVendors(vendors);
+  UI.toast(existing ? "업체 정보를 수정했어요" : "업체를 추가했어요");
+}
+
+async function deleteVendor(idx) {
+  const vendors = getVendors().map((v) => ({ ...v }));
+  if (idx < 0 || idx >= vendors.length) return;
+  if (!(await UI.confirmBox(`'${vendors[idx].name}' 업체를 목록에서 삭제할까요?`))) return;
+  vendors.splice(idx, 1);
+  await saveVendors(vendors);
+  UI.toast("업체를 삭제했어요");
 }
 
 /* 결제 건 한 줄 (occDate가 주어지면 업체명 대신 그 발생 날짜를 앞세움) */
@@ -4028,7 +4134,7 @@ function listGoalsAnswer(q) {
 
 function listDocsAnswer(q) {
   const term = q.replace(/문서|sop|매뉴얼|양식|찾아|검색|알려줘|보여줘/gi, "").trim().toLowerCase();
-  let ds = Store.list("docs");
+  let ds = Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE);
   if (term)
     ds = ds.filter((d) =>
       [d.title, d.category, d.body].join(" ").toLowerCase().includes(term)
@@ -4074,7 +4180,7 @@ function searchAllAnswer(q) {
     match: (i) => hit(i.title) || hit(i.body),
     line: (i) => UI.esc(i.title),
   });
-  add("업무 문서", "docs", Store.list("docs"), {
+  add("업무 문서", "docs", Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE), {
     match: (d) => hit(d.title) || hit(d.body),
     line: (d) => UI.esc(d.title),
   });
@@ -4249,7 +4355,10 @@ async function handleAction(act, el) {
     case "pay-add": return paymentForm();
     case "pay-add-on": return paymentForm(null, el.getAttribute("data-date"));
     case "pay-add-vendor":
-      return paymentForm(null, null, VENDORS[parseInt(el.getAttribute("data-idx"))]);
+      return paymentForm(null, null, getVendors()[parseInt(el.getAttribute("data-idx"))]);
+    case "vendor-add": return vendorForm(null);
+    case "vendor-edit": return vendorForm(parseInt(el.getAttribute("data-idx")));
+    case "vendor-del": return deleteVendor(parseInt(el.getAttribute("data-idx")));
     case "pay-edit": return paymentForm(find("events"));
     case "pay-del":
       if (await UI.confirmBox("이 결제 건을 삭제할까요?")) await Store.remove("events", id);
