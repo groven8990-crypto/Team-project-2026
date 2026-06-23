@@ -58,6 +58,10 @@ const VENDORS = [
 const VENDOR_TERM_ORDER = ["즉시결제", "주결제", "선급", "15일결제", "당월말결제", "익일결제"];
 /* 업체 목록은 docs에 JSON으로 저장(팀 공유). 없으면 하드코딩 기본값 사용 */
 const VENDOR_DOC_TITLE = "__vendor_master__";
+/* 내부 설정용(문서함에 안 보이게 숨길) docs 판별 */
+function isHiddenDoc(d) {
+  return d && (d.title === VENDOR_DOC_TITLE || d.title === "__report_config__");
+}
 function getVendors() {
   const rec = Store.list("docs").find((d) => d.title === VENDOR_DOC_TITLE);
   if (rec && rec.body) {
@@ -314,6 +318,8 @@ const HELP = {
       "  · 상세를 고른 업무는 제목(-) 아래에 상세가 '•'로 한 번만 붙어요(내일 할 일은 항상 제목만).",
       "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
       "  · 날짜별 취합에서 각 보고 카드 아래 '💬 피드백' 칸에 직접 의견을 적고 '피드백 저장'을 누르면 팀원과 공유돼요(칸 밖을 눌러도 자동 저장).",
+      "  · 날짜별 취합의 '⚙️ 보고 대상'에서 일일보고에 포함할 멤버를 고를 수 있어요(체크 해제하면 취합·제출 양식에서 빠져요).",
+      "  · 휴무는 일정의 제목이 있으면 그 제목으로 표시돼요(예: '수입엑스포 방문 (외근)'). 제목을 비우면 구분명(연차 등)으로 표시돼요.",
       "【주간 계획】 이번 주에 할 계획을 미리 작성하는 보고서예요 (지난 주 실적 정리가 아니에요!).",
       "  · '⚡ 자동생성'을 누르면 이번 주 등록된 업무·일정이 초안으로 채워져요.",
       "  · 주간 목표 진행률은 본인의 전체 업무 평균 진행률을 자동으로 계산해 넣어요.",
@@ -511,11 +517,14 @@ function renderHome() {
     .slice()
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
 
-  // 오늘 보고 현황
-  const reportStatus = members.map((m) => ({
-    m,
-    done: reports.some((r) => r.member_id === m.id && r.date === today),
-  }));
+  // 오늘 보고 현황 (일일보고 제외 멤버는 빼고)
+  const reportExSet = new Set(getReportExcluded());
+  const reportStatus = members
+    .filter((m) => !reportExSet.has(m.id))
+    .map((m) => ({
+      m,
+      done: reports.some((r) => r.member_id === m.id && r.date === today),
+    }));
 
   const sec = (title, route, body, addAct) => `
     <div class="home-card">
@@ -1355,7 +1364,7 @@ function docMatches(d, q) {
 
 function docTreeHTML() {
   const q = App.state.docSearch;
-  const all = Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE);
+  const all = Store.list("docs").filter((d) => !isHiddenDoc(d));
   const docs = all.filter((d) => !d.is_template && docMatches(d, q));
   const templates = all.filter((d) => d.is_template && docMatches(d, q));
 
@@ -1410,7 +1419,7 @@ function docTreeHTML() {
 }
 
 function docMainHTML() {
-  const docs = Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE);
+  const docs = Store.list("docs").filter((d) => !isHiddenDoc(d));
   if (!docs.length) {
     return `<div class="doc-empty">
       <div class="doc-empty-icon">📄</div>
@@ -1482,7 +1491,7 @@ async function docForm(existing, useTemplate) {
   const cats = Array.from(
     new Set(
       Store.list("docs")
-        .filter((d) => d.title !== VENDOR_DOC_TITLE)
+        .filter((d) => !isHiddenDoc(d))
         .map((d) => d.category)
         .filter(Boolean)
     )
@@ -1829,7 +1838,12 @@ function leaveLabelFor(memberId, dateStr) {
       // (작성자는 단지 등록한 사람일 수 있으므로 참여자가 있으면 작성자는 제외)
       return parts.length ? parts.includes(memberId) : e.member_id === memberId;
     })
-    .map((e) => eventLeave(e));
+    .map((e) => {
+      // 일정 제목이 따로 있으면(예: '수입엑스포 방문') 제목을 우선 표시하고, 구분은 괄호로
+      const type = eventLeave(e);
+      const title = (e.title || "").trim();
+      return title && title !== type ? `${title} (${type})` : type;
+    });
   return [...new Set(labels)].join("·");
 }
 
@@ -3217,13 +3231,15 @@ function planCard(r) {
 /* ===== 날짜별 취합 보기 ===== */
 function renderReportsCollect() {
   const date = App.state.reportDate || UI.todayInput();
+  const exSet = new Set(getReportExcluded());
   const dayReports = Store.list("reports")
-    .filter((r) => isDailyReport(r) && r.date === date)
+    .filter((r) => isDailyReport(r) && r.date === date && !exSet.has(r.member_id))
     .sort((a, b) => memberOrder(a.member_id) - memberOrder(b.member_id));
   const reportedIds = new Set(dayReports.map((r) => r.member_id));
 
-  // 그 날 휴무(연차 등)인데 보고서를 안 쓴 사람 → 자동 '연차' 카드 생성
+  // 그 날 휴무(연차 등)인데 보고서를 안 쓴 사람 → 자동 '연차' 카드 생성 (제외 멤버는 빼고)
   const leaveMembers = Store.list("members")
+    .filter((m) => !exSet.has(m.id))
     .map((m) => ({ m, lv: leaveLabelFor(m.id, date) }))
     .filter((x) => x.lv && !reportedIds.has(x.m.id))
     .sort((a, b) => memberOrder(a.m.id) - memberOrder(b.m.id));
@@ -3237,16 +3253,80 @@ function renderReportsCollect() {
   const leaveNote = leaveMembers.length
     ? ` <span class="muted" style="font-weight:600">(🌴 연차 ${leaveMembers.length}명 자동 포함)</span>`
     : "";
+  const exNote = exSet.size
+    ? ` <span class="muted" style="font-weight:600">· 제외 ${exSet.size}명</span>`
+    : "";
 
   return `
     ${reportCollectCalendar()}
     <div class="collect-head">
-      <h3>📅 ${UI.fmtDate(date)} · 일일보고 ${total}건${leaveNote}</h3>
-      <button class="btn primary" data-act="report-combine" data-date="${date}" ${
+      <h3>📅 ${UI.fmtDate(date)} · 일일보고 ${total}건${leaveNote}${exNote}</h3>
+      <div class="head-btns">
+        <button class="btn ghost sm" data-act="report-targets">⚙️ 보고 대상</button>
+        <button class="btn primary" data-act="report-combine" data-date="${date}" ${
     total ? "" : "disabled"
   }>📄 취합 제출 양식 (${total}명)</button>
+      </div>
     </div>
     <div class="list">${cards}</div>`;
+}
+
+/* 일일보고 대상 설정: 제외 멤버 목록을 docs에 JSON으로 저장(팀 공유) */
+const REPORT_CFG_DOC = "__report_config__";
+function getReportExcluded() {
+  const rec = Store.list("docs").find((d) => d.title === REPORT_CFG_DOC);
+  if (rec && rec.body) {
+    try {
+      const o = JSON.parse(rec.body);
+      if (Array.isArray(o.excluded)) return o.excluded;
+    } catch (e) {}
+  }
+  return [];
+}
+async function saveReportExcluded(ids) {
+  const rec = Store.list("docs").find((d) => d.title === REPORT_CFG_DOC);
+  const body = JSON.stringify({ excluded: ids });
+  if (rec) await Store.update("docs", rec.id, { body });
+  else
+    await Store.add("docs", {
+      title: REPORT_CFG_DOC,
+      category: "__system__",
+      body,
+      is_template: false,
+    });
+}
+/* 일일보고 대상 멤버(제외자 뺀 목록, 등록 순서 유지) */
+function reportMembers() {
+  const ex = new Set(getReportExcluded());
+  return Store.list("members").filter((m) => !ex.has(m.id));
+}
+/* 보고 대상 멤버 선택 모달 */
+async function reportTargetForm() {
+  const members = Store.list("members");
+  if (!members.length) {
+    UI.toast("먼저 멤버를 등록하세요", "warn");
+    return;
+  }
+  const ex = new Set(getReportExcluded());
+  const res = await UI.formModal({
+    title: "일일보고 대상 멤버",
+    submitText: "저장",
+    values: { ids: members.filter((m) => !ex.has(m.id)).map((m) => m.id) },
+    fields: [
+      {
+        name: "ids",
+        label: "일일보고에 포함할 멤버를 선택하세요 (체크 해제하면 취합·제출 양식에서 빠져요)",
+        type: "checks",
+        full: true,
+        options: members.map((m) => ({ value: m.id, label: m.name })),
+      },
+    ],
+  });
+  if (!res) return;
+  const included = new Set(res.ids || []);
+  const excluded = members.filter((m) => !included.has(m.id)).map((m) => m.id);
+  await saveReportExcluded(excluded);
+  UI.toast("일일보고 대상이 저장되었어요");
 }
 
 function reportCollectCalendar() {
@@ -3256,10 +3336,11 @@ function reportCollectCalendar() {
   const selected = App.state.reportDate || UI.todayInput();
   const today = UI.todayInput();
 
-  // 날짜별 일일보고 개수
+  // 날짜별 일일보고 개수 (제외 멤버 제외)
+  const exSet = new Set(getReportExcluded());
   const countByDate = {};
   Store.list("reports")
-    .filter((r) => isDailyReport(r) && r.date)
+    .filter((r) => isDailyReport(r) && r.date && !exSet.has(r.member_id))
     .forEach((r) => (countByDate[r.date] = (countByDate[r.date] || 0) + 1));
 
   const first = new Date(year, month, 1);
@@ -3314,7 +3395,7 @@ function mixHex(hexA, hexB, pctA) {
 }
 
 function combinedSheetHTML(date) {
-  const members = Store.list("members"); // 등록 순서
+  const members = reportMembers(); // 등록 순서, 제외 멤버 빼고
   const reps = Store.list("reports").filter(
     (r) => isDailyReport(r) && r.date === date
   );
@@ -3356,8 +3437,11 @@ function combinedSheetHTML(date) {
 }
 
 function openCombinedReport(date) {
-  const members = Store.list("members");
-  const reps = Store.list("reports").filter((r) => isDailyReport(r) && r.date === date);
+  const members = reportMembers();
+  const memberIds = new Set(members.map((m) => m.id));
+  const reps = Store.list("reports").filter(
+    (r) => isDailyReport(r) && r.date === date && memberIds.has(r.member_id)
+  );
   const hasLeave = members.some((m) => leaveLabelFor(m.id, date));
   if (!reps.length && !hasLeave) return;
   const byMember = {};
@@ -4188,7 +4272,7 @@ function listGoalsAnswer(q) {
 
 function listDocsAnswer(q) {
   const term = q.replace(/문서|sop|매뉴얼|양식|찾아|검색|알려줘|보여줘/gi, "").trim().toLowerCase();
-  let ds = Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE);
+  let ds = Store.list("docs").filter((d) => !isHiddenDoc(d));
   if (term)
     ds = ds.filter((d) =>
       [d.title, d.category, d.body].join(" ").toLowerCase().includes(term)
@@ -4234,7 +4318,7 @@ function searchAllAnswer(q) {
     match: (i) => hit(i.title) || hit(i.body),
     line: (i) => UI.esc(i.title),
   });
-  add("업무 문서", "docs", Store.list("docs").filter((d) => d.title !== VENDOR_DOC_TITLE), {
+  add("업무 문서", "docs", Store.list("docs").filter((d) => !isHiddenDoc(d)), {
     match: (d) => hit(d.title) || hit(d.body),
     line: (d) => UI.esc(d.title),
   });
@@ -4524,6 +4608,7 @@ async function handleAction(act, el) {
       return;
     case "report-combine":
       return openCombinedReport(el.getAttribute("data-date"));
+    case "report-targets": return reportTargetForm();
     case "report-add": return reportForm();
     case "report-auto": return startAutoReport();
     case "wreport-add": return planReportForm("weekly");
