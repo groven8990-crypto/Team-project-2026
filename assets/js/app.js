@@ -3174,7 +3174,7 @@ function dailyCard(r) {
       ${r.note ? `<div class="report-row"><b>특이사항</b><div>${reportRich(r.note)}</div></div>` : ""}
       <div class="report-feedback">
         <label class="fb-label">💬 피드백</label>
-        <textarea class="fb-input" data-fb-id="${r.id}" rows="2" placeholder="이 보고서에 대한 피드백을 직접 입력하세요…">${UI.esc(fb)}</textarea>
+        <textarea class="fb-input" data-fb-id="${r.id}" rows="5" placeholder="이 보고서에 대한 피드백을 직접 입력하세요…">${UI.esc(fb)}</textarea>
         <button class="btn xs primary fb-save" data-act="report-feedback-save" data-id="${r.id}">피드백 저장</button>
       </div>
       <div class="card-actions">
