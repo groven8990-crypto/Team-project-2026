@@ -495,7 +495,7 @@ a { color: inherit; }
 .fb-input {
   width: 100%; box-sizing: border-box; border: 1px solid var(--line-2); border-radius: 8px;
   padding: 10px 12px; font-family: inherit; font-size: 14px; line-height: 1.6; resize: vertical;
-  min-height: 132px; background: #fff; color: var(--ink);
+  min-height: 190px; background: #fff; color: var(--ink);
 }
 .fb-input:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
 .fb-save { align-self: flex-end; }
