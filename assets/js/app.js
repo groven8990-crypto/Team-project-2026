@@ -361,6 +361,34 @@ const EVENT_COLORS = [
   { hex: "#14b8a6", label: "청록" },
   { hex: "#64748b", label: "회색" },
 ];
+/* 셀러(계정) → 띠 전체 색(선·화살표·테두리). 제목 앞부분으로 자동 인식 */
+const SELLER_COLORS = {
+  YB: "#eab308", // 노랑
+  그로븐: "#22c55e", // 초록
+  그로본: "#22c55e",
+};
+/* 플랫폼명 → 라벨 글자색 (이 단어만 색이 바뀜) */
+const PLATFORM_COLORS = {
+  옥션: "#2563eb", // 파랑
+  G마켓: "#7c3aed", // 보라
+  지마켓: "#7c3aed",
+  쿠팡: "#ef4444", // 빨강
+};
+/* 라벨에서 플랫폼명 단어만 색칠 (나머지는 기본 글자색) */
+function highlightPlatforms(title) {
+  let html = UI.esc(title || "");
+  Object.keys(PLATFORM_COLORS)
+    .sort((a, b) => b.length - a.length)
+    .forEach((name) => {
+      const en = UI.esc(name);
+      if (html.includes(en))
+        html = html
+          .split(en)
+          .join(`<span class="plat" style="color:${PLATFORM_COLORS[name]}">${en}</span>`);
+    });
+  return html;
+}
+
 function eventColor(e) {
   const tok = (e.scope || "")
     .split(",")
@@ -2014,10 +2042,13 @@ function paymentCalendar(year, month, payList) {
     </div>`;
 }
 
-/* 여러 날 일정 띠(타임라인 화살표) 색상 — 진한 단색 한 가지 */
+/* 여러 날 일정 띠(타임라인 화살표) 색상 — 진한 단색 한 가지
+   1) 직접 고른 색 → 2) 셀러 접두어(YB/그로븐 등) → 3) 기본 */
 function spanColor(e) {
   const col = eventColor(e);
   if (col) return col;
+  const t = (e.title || "").trim();
+  for (const k in SELLER_COLORS) if (t.startsWith(k)) return SELLER_COLORS[k];
   if (eventLeave(e)) return "#0f766e";
   const s = eventScopes(e);
   if (s.includes("month")) return "#7c3aed";
@@ -2102,7 +2133,7 @@ function calendarGrid(year, month, events) {
         const lv = eventLeave(e);
         // 시작 지점 둥근 라벨 + 색선 + 화살표(→)
         return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 23}px;--c:${c}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">
-            <span class="span-pill">${lv ? "🌴 " : ""}${UI.esc(e.title)}</span>
+            <span class="span-pill">${lv ? "🌴 " : ""}${highlightPlatforms(e.title)}</span>
             <span class="span-line"></span>
             <span class="span-arrow"></span>
           </div>`;
