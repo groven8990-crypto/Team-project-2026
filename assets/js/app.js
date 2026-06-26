@@ -2055,7 +2055,10 @@ function calendarGrid(year, month, events) {
            </div>`;
         }
         const col = eventColor(e);
-        const colStyle = col ? ` style="background:${col};color:#fff;border-color:${col}"` : "";
+        // 파스텔: 연한 배경 + 진한 글자색
+        const colStyle = col
+          ? ` style="background:${mixHex(col, "#ffffff", 18)};color:${mixHex(col, "#1f2937", 72)}"`
+          : "";
         return `<div class="cal-ev-wrap">
              <div class="cal-ev ${col ? "is-color" : scopeClass(e)} ${eventLeave(e) && !col ? "is-leave" : ""}"${colStyle} data-act="event-edit" data-id="${
           e.id

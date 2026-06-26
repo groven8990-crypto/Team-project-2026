@@ -743,7 +743,7 @@ input[type="number"].pt-prog:focus { outline: none; border-color: var(--brand); 
 .leave-chip b { color: #0e7490; }
 .report-card.leave-card { background: #f0fdfa; border-color: #99f6e4; }
 .cal-ev.is-leave { background: #ccfbf1 !important; color: #0f766e !important; }
-.cal-ev.is-color { font-weight: 700; }
+.cal-ev.is-color { font-weight: 600; }
 /* 색상 필터 바 */
 .cal-color-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .ccb-label { font-size: 12.5px; font-weight: 800; color: var(--muted); margin-right: 2px; }
