@@ -2132,7 +2132,7 @@ function calendarGrid(year, month, events) {
         const width = `calc((${span} * (100% - 6 * var(--cal-gap)) / 7) + ${span - 1} * var(--cal-gap) - 2px)`;
         const lv = eventLeave(e);
         // 시작 지점 둥근 라벨 + 색선 + 화살표(→)
-        return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 23}px;--c:${c}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">
+        return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 23}px;--c:${c};--cbg:${mixHex(c, "#ffffff", 16)}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">
             <span class="span-pill">${lv ? "🌴 " : ""}${highlightPlatforms(e.title)}</span>
             <span class="span-line"></span>
             <span class="span-arrow"></span>
