@@ -2014,83 +2014,167 @@ function paymentCalendar(year, month, payList) {
     </div>`;
 }
 
+/* 여러 날 일정 띠 색상 (파스텔) */
+function spanPalette(e) {
+  const col = eventColor(e);
+  if (col) return { bg: mixHex(col, "#ffffff", 18), fg: mixHex(col, "#1f2937", 72) };
+  if (eventLeave(e)) return { bg: "#ccfbf1", fg: "#0f766e" };
+  const s = eventScopes(e);
+  if (s.includes("month")) return { bg: "#ece7fb", fg: "#6d28d9" };
+  if (s.includes("week")) return { bg: "#fdebcb", fg: "#b45309" };
+  return { bg: "#e0e7ff", fg: "#4338ca" };
+}
+
 function calendarGrid(year, month, events) {
-  const first = new Date(year, month, 1);
-  const startDay = first.getDay();
+  const startDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = UI.todayInput();
   const colorFilter = App.state.calColor;
+  const pad = (n) => String(n).padStart(2, "0");
+  const dstr = (n) => `${year}-${pad(month + 1)}-${pad(n)}`;
+
+  // 색상 필터 적용
+  const visible = events.filter((e) => !colorFilter || eventColor(e) === colorFilter);
+  // 여러 날(2일 이상) 일정 → 띠로 표시 (결제 제외)
+  const spanEvents = visible.filter(
+    (e) => !eventPayment(e) && e.date && e.end_date && e.end_date > e.date
+  );
 
   const wd = ["일", "월", "화", "수", "목", "금", "토"]
     .map((d, i) => `<div class="cal-wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${d}</div>`)
     .join("");
 
-  let cells = "";
-  for (let i = 0; i < startDay; i++) cells += `<div class="cal-cell empty"></div>`;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(
-      2,
-      "0"
-    )}`;
-    const dow = (startDay + d - 1) % 7; // 0=일, 6=토
-    const hol = holidayName(ds);
-    const dayCls = hol || dow === 0 ? "sun" : dow === 6 ? "sat" : "";
-    const dayEvents = events.filter((e) => {
-      // 색상 필터: 선택한 색의 일정만 표시
-      if (colorFilter && eventColor(e) !== colorFilter) return false;
-      const pay = eventPayment(e);
-      if (pay) return payOccursOn(e, pay, ds); // 결제는 반복 규칙으로 표시
-      const start = e.date;
-      const end = e.end_date || e.date;
-      return start && ds >= start && ds <= end;
-    });
-    const evHtml = dayEvents
-      .slice(0, 4)
-      .map((e) => {
-        const pay = eventPayment(e);
-        if (pay) {
-          // 결제 건은 💰 업체 + 금액으로 표시, 클릭 시 결제 수정
-          return `<div class="cal-ev-wrap">
-             <div class="cal-ev is-pay" data-act="pay-edit" data-id="${e.id}" title="${UI.esc(e.title)} ${fmtWon(pay.amount)}">💰 ${UI.esc(e.title)} <b>${fmtWon(pay.amount)}</b></div>
-           </div>`;
+  const numWeeks = Math.ceil((startDay + daysInMonth) / 7);
+  let weeksHtml = "";
+
+  for (let w = 0; w < numWeeks; w++) {
+    const weekDates = [];
+    for (let c = 0; c < 7; c++) {
+      const dayNum = w * 7 + c - startDay + 1;
+      weekDates.push(dayNum >= 1 && dayNum <= daysInMonth ? dstr(dayNum) : null);
+    }
+    const firstDate = weekDates.find(Boolean);
+    const lastDate = [...weekDates].reverse().find(Boolean);
+
+    // 이 주에 걸치는 띠 일정 → 레인(겹침 방지) 배치
+    const laneEnds = [];
+    const placed = [];
+    spanEvents
+      .filter((e) => firstDate && e.date <= lastDate && e.end_date >= firstDate)
+      .sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) || b.end_date.localeCompare(a.end_date)
+      )
+      .forEach((e) => {
+        let sCol = -1,
+          eCol = -1;
+        for (let c = 0; c < 7; c++) {
+          const wds = weekDates[c];
+          if (wds && wds >= e.date && wds <= e.end_date) {
+            if (sCol === -1) sCol = c;
+            eCol = c;
+          }
         }
-        const col = eventColor(e);
-        // 파스텔: 연한 배경 + 진한 글자색
-        const colStyle = col
-          ? ` style="background:${mixHex(col, "#ffffff", 18)};color:${mixHex(col, "#1f2937", 72)}"`
-          : "";
-        return `<div class="cal-ev-wrap">
-             <div class="cal-ev ${col ? "is-color" : scopeClass(e)} ${eventLeave(e) && !col ? "is-leave" : ""}"${colStyle} data-act="event-edit" data-id="${
-          e.id
-        }" title="${UI.esc(e.title)}">${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</div>
-             ${
-               Array.isArray(e.participants) && e.participants.length
-                 ? `<div class="cal-ev-dots">${memberDots(e.participants)}</div>`
-                 : ""
-             }
-           </div>`;
+        if (sCol === -1) return;
+        let lane = laneEnds.findIndex((end) => end < sCol);
+        if (lane === -1) {
+          lane = laneEnds.length;
+          laneEnds.push(eCol);
+        } else laneEnds[lane] = eCol;
+        placed.push({
+          e,
+          sCol,
+          eCol,
+          lane,
+          leftCont: e.date < weekDates[sCol],
+          rightCont: e.end_date > weekDates[eCol],
+        });
+      });
+    const barRows = laneEnds.length;
+
+    const barsHtml = placed
+      .map(({ e, sCol, eCol, lane, leftCont, rightCont }) => {
+        const { bg, fg } = spanPalette(e);
+        const span = eCol - sCol + 1;
+        // 칸 사이 간격(--cal-gap)을 반영해 셀과 정확히 정렬
+        const left = `calc((${sCol} * (100% - 6 * var(--cal-gap)) / 7) + ${sCol} * var(--cal-gap) + 1px)`;
+        const width = `calc((${span} * (100% - 6 * var(--cal-gap)) / 7) + ${span - 1} * var(--cal-gap) - 2px)`;
+        const lv = eventLeave(e);
+        return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 20}px;background:${bg};color:${fg}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">${leftCont ? "◀ " : ""}${lv ? "🌴 " : ""}${UI.esc(e.title)}${rightCont ? " ▶" : ""}</div>`;
       })
       .join("");
-    const more =
-      dayEvents.length > 4
-        ? `<div class="cal-more">+${dayEvents.length - 4}</div>`
-        : "";
-    cells += `
-      <div class="cal-cell ${ds === today ? "today" : ""} ${
-      hol ? "holiday" : ""
-    }" data-act="day-view" data-date="${ds}" title="클릭하면 이 날짜의 일정 전체 보기">
-        <div class="cal-daynum ${dayCls}">${d}</div>
-        ${hol ? `<div class="cal-holiday" title="${UI.esc(hol)}">${UI.esc(hol)}</div>` : ""}
-        ${evHtml}${more}
+
+    // 7칸 셀
+    let cellsHtml = "";
+    for (let c = 0; c < 7; c++) {
+      const ds = weekDates[c];
+      if (!ds) {
+        cellsHtml += `<div class="cal-cell empty"></div>`;
+        continue;
+      }
+      const d = w * 7 + c - startDay + 1;
+      const dow = c;
+      const hol = holidayName(ds);
+      const dayCls = hol || dow === 0 ? "sun" : dow === 6 ? "sat" : "";
+      // 하루 일정 + 결제 (여러 날 일정은 띠로 빠짐)
+      const dayEvents = visible.filter((e) => {
+        const pay = eventPayment(e);
+        if (pay) return payOccursOn(e, pay, ds);
+        if (e.date && e.end_date && e.end_date > e.date) return false; // 띠 처리
+        const start = e.date;
+        const end = e.end_date || e.date;
+        return start && ds >= start && ds <= end;
+      });
+      const evHtml = dayEvents
+        .slice(0, 4)
+        .map((e) => {
+          const pay = eventPayment(e);
+          if (pay) {
+            return `<div class="cal-ev-wrap">
+               <div class="cal-ev is-pay" data-act="pay-edit" data-id="${e.id}" title="${UI.esc(e.title)} ${fmtWon(pay.amount)}">💰 ${UI.esc(e.title)} <b>${fmtWon(pay.amount)}</b></div>
+             </div>`;
+          }
+          const col = eventColor(e);
+          const colStyle = col
+            ? ` style="background:${mixHex(col, "#ffffff", 18)};color:${mixHex(col, "#1f2937", 72)}"`
+            : "";
+          return `<div class="cal-ev-wrap">
+               <div class="cal-ev ${col ? "is-color" : scopeClass(e)} ${eventLeave(e) && !col ? "is-leave" : ""}"${colStyle} data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</div>
+               ${
+                 Array.isArray(e.participants) && e.participants.length
+                   ? `<div class="cal-ev-dots">${memberDots(e.participants)}</div>`
+                   : ""
+               }
+             </div>`;
+        })
+        .join("");
+      const more =
+        dayEvents.length > 4 ? `<div class="cal-more">+${dayEvents.length - 4}</div>` : "";
+      cellsHtml += `
+        <div class="cal-cell ${ds === today ? "today" : ""} ${hol ? "holiday" : ""}" data-act="day-view" data-date="${ds}" title="클릭하면 이 날짜의 일정 전체 보기">
+          <div class="cal-daynum ${dayCls}">${d}</div>
+          ${barRows ? `<div class="bar-space" style="height:${barRows * 20}px"></div>` : ""}
+          ${hol ? `<div class="cal-holiday" title="${UI.esc(hol)}">${UI.esc(hol)}</div>` : ""}
+          ${evHtml}${more}
+        </div>`;
+    }
+
+    weeksHtml += `
+      <div class="cal-week">
+        <div class="cal-week-cells">${cellsHtml}</div>
+        ${barRows ? `<div class="cal-week-bars">${barsHtml}</div>` : ""}
       </div>`;
   }
 
-  return `<div class="cal-grid">${wd}${cells}</div>
+  return `<div class="cal-grid-wrap">
+      <div class="cal-wd-row">${wd}</div>
+      <div class="cal-weeks">${weeksHtml}</div>
+    </div>
     <div class="cal-legend">
       <span><i class="dot scope-day"></i>일반</span>
       <span><i class="dot scope-week"></i>주별</span>
       <span><i class="dot scope-month"></i>월별</span>
-      <span class="muted">날짜 칸을 클릭하면 그 날의 일정을 모아 볼 수 있어요</span>
+      <span class="muted">여러 날 일정은 띠로 이어져 보이고, 날짜 칸을 클릭하면 그 날 일정을 모아 볼 수 있어요</span>
     </div>`;
 }
 
