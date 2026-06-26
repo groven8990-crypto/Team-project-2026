@@ -743,6 +743,14 @@ input[type="number"].pt-prog:focus { outline: none; border-color: var(--brand); 
 .leave-chip b { color: #0e7490; }
 .report-card.leave-card { background: #f0fdfa; border-color: #99f6e4; }
 .cal-ev.is-leave { background: #ccfbf1 !important; color: #0f766e !important; }
+.cal-ev.is-color { font-weight: 700; }
+/* 색상 필터 바 */
+.cal-color-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.ccb-label { font-size: 12.5px; font-weight: 800; color: var(--muted); margin-right: 2px; }
+.cal-color-sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line-2); cursor: pointer; padding: 0; }
+.cal-color-sw.active { box-shadow: 0 0 0 2px var(--ink); transform: scale(1.12); }
+.cal-color-all { font-size: 12px; font-weight: 700; border: 1px solid var(--line-2); background: #fff; color: var(--ink-2); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-family: inherit; }
+.cal-color-all.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 @media (max-width: 600px) { .combined-grid { grid-template-columns: 1fr; } }
 
 /* 사람별 보기 진행률 박스 */

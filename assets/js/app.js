@@ -258,6 +258,7 @@ const HELP = {
       "  · 참여자가 많으면 '+N명' 형식으로 줄여서 보여요.",
       "토요일은 파란색, 일요일·공휴일은 빨간색으로 표시돼요. 대한민국 공휴일은 날짜 칸에 이름이 함께 나와요.",
       "【연차·휴무】 일정 추가 시 '휴무/부재 구분'에서 연차·반차·병가·외근 등을 고르고 대상자를 '참여자'에 넣으면, 그 날 일일보고 자동생성 시 '오늘 한 일'에 [연차]처럼 자동으로 들어가고 날짜별 취합에도 표시돼요.",
+      "【색상】 일정 추가/수정 시 색상을 고르면 달력에 그 색으로 표시돼요. 달력 위 '색상별 보기'에서 색을 누르면 그 색 일정만 모아 볼 수 있어요('전체'로 해제).",
       "‹ › 화살표로 한 달씩, « » 화살표로 한 해씩 이동할 수 있어요. '오늘'을 누르면 이번 달로 돌아와요.",
     ],
   },
@@ -349,6 +350,25 @@ const MEMBER_COLORS = [
   "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#64748b",
 ];
 
+/* 캘린더 일정 색상 팔레트 (scope에 'color:#hex'로 저장) */
+const EVENT_COLORS = [
+  { hex: "#3b82f6", label: "파랑" },
+  { hex: "#22c55e", label: "초록" },
+  { hex: "#eab308", label: "노랑" },
+  { hex: "#ef4444", label: "빨강" },
+  { hex: "#a855f7", label: "보라" },
+  { hex: "#ec4899", label: "분홍" },
+  { hex: "#14b8a6", label: "청록" },
+  { hex: "#64748b", label: "회색" },
+];
+function eventColor(e) {
+  const tok = (e.scope || "")
+    .split(",")
+    .map((x) => x.trim())
+    .find((x) => x.startsWith("color:"));
+  return tok ? tok.slice(6) : "";
+}
+
 const App = {
   route: location.hash.replace("#", "") || "home",
   // 화면별 임시 상태 보관
@@ -373,6 +393,7 @@ const App = {
     reportCalRef: new Date(), // 취합 캘린더 기준 월
     payView: "daily", // 결제 일정 보기: daily | monthly
     payRef: new Date(), // 결제 일정 기준 월
+    calColor: "", // 캘린더 색상 필터 ("" = 전체)
   },
 };
 
@@ -1634,8 +1655,24 @@ function renderCalendar() {
         <button class="icon-btn" data-act="cal-year-next" title="다음 연도">»</button>
         <button class="btn ghost sm" data-act="cal-today">오늘</button>
       </div>
+      ${colorFilterBar()}
       ${calendarGrid(year, month, events)}
     </section>`;
+}
+
+/* 색상 필터 바: 색깔별로만 보기 */
+function colorFilterBar() {
+  const cur = App.state.calColor;
+  const swatches = EVENT_COLORS.map(
+    (c) =>
+      `<button class="cal-color-sw ${cur === c.hex ? "active" : ""}" data-act="cal-color" data-color="${c.hex}" style="background:${c.hex}" title="${c.label}만 보기"></button>`
+  ).join("");
+  return `
+    <div class="cal-color-bar">
+      <span class="ccb-label">색상별 보기</span>
+      <button class="cal-color-all ${!cur ? "active" : ""}" data-act="cal-color" data-color="">전체</button>
+      ${swatches}
+    </div>`;
 }
 
 function memberDots(ids) {
@@ -1982,6 +2019,7 @@ function calendarGrid(year, month, events) {
   const startDay = first.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = UI.todayInput();
+  const colorFilter = App.state.calColor;
 
   const wd = ["일", "월", "화", "수", "목", "금", "토"]
     .map((d, i) => `<div class="cal-wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${d}</div>`)
@@ -1998,6 +2036,8 @@ function calendarGrid(year, month, events) {
     const hol = holidayName(ds);
     const dayCls = hol || dow === 0 ? "sun" : dow === 6 ? "sat" : "";
     const dayEvents = events.filter((e) => {
+      // 색상 필터: 선택한 색의 일정만 표시
+      if (colorFilter && eventColor(e) !== colorFilter) return false;
       const pay = eventPayment(e);
       if (pay) return payOccursOn(e, pay, ds); // 결제는 반복 규칙으로 표시
       const start = e.date;
@@ -2014,8 +2054,10 @@ function calendarGrid(year, month, events) {
              <div class="cal-ev is-pay" data-act="pay-edit" data-id="${e.id}" title="${UI.esc(e.title)} ${fmtWon(pay.amount)}">💰 ${UI.esc(e.title)} <b>${fmtWon(pay.amount)}</b></div>
            </div>`;
         }
+        const col = eventColor(e);
+        const colStyle = col ? ` style="background:${col};color:#fff;border-color:${col}"` : "";
         return `<div class="cal-ev-wrap">
-             <div class="cal-ev ${scopeClass(e)} ${eventLeave(e) ? "is-leave" : ""}" data-act="event-edit" data-id="${
+             <div class="cal-ev ${col ? "is-color" : scopeClass(e)} ${eventLeave(e) && !col ? "is-leave" : ""}"${colStyle} data-act="event-edit" data-id="${
           e.id
         }" title="${UI.esc(e.title)}">${eventLeave(e) ? "🌴 " : ""}${UI.esc(e.title)}</div>
              ${
@@ -2051,7 +2093,7 @@ function calendarGrid(year, month, events) {
 
 async function eventForm(existing, presetDate, isLeave) {
   const values = existing
-    ? { ...existing, scopes: eventScopes(existing), leave_type: eventLeave(existing) }
+    ? { ...existing, scopes: eventScopes(existing), leave_type: eventLeave(existing), color: eventColor(existing) }
     : {
         member_id: curUser(),
         date: presetDate || UI.todayInput(),
@@ -2059,6 +2101,7 @@ async function eventForm(existing, presetDate, isLeave) {
         // 연차 추가로 열었으면 구분=연차, 대상자=본인 기본 세팅
         leave_type: isLeave ? "연차" : "",
         participants: isLeave && curUser() ? [curUser()] : undefined,
+        color: "",
       };
   const res = await UI.formModal({
     title: existing ? "일정 수정" : isLeave ? "연차/휴무 추가" : "일정 추가",
@@ -2088,6 +2131,13 @@ async function eventForm(existing, presetDate, isLeave) {
         ],
       },
       {
+        name: "color",
+        label: "색상 (색깔별 보기용 / 안 정하면 기본색)",
+        type: "color",
+        full: true,
+        options: EVENT_COLORS.map((c) => c.hex),
+      },
+      {
         name: "member_id",
         label: "작성자",
         type: "select",
@@ -2110,9 +2160,11 @@ async function eventForm(existing, presetDate, isLeave) {
   // → Supabase에 별도 컬럼 없이도 저장됨(클라우드 모드 호환)
   const tokens = Array.isArray(res.scopes) ? res.scopes.slice() : [];
   if (res.leave_type) tokens.push("leave:" + res.leave_type);
+  if (res.color) tokens.push("color:" + res.color);
   res.scope = tokens.length ? tokens.join(",") : "day";
   delete res.scopes;
   delete res.leave_type; // 별도 컬럼 저장 안 함(scope에 인코딩됨)
+  delete res.color; // scope에 인코딩됨
   if (existing) {
     await Store.update("events", existing.id, res);
     UI.toast("일정이 수정되었습니다");
@@ -4488,6 +4540,10 @@ async function handleAction(act, el) {
       return;
     case "cal-today":
       App.state.calendarRef = new Date();
+      render();
+      return;
+    case "cal-color":
+      App.state.calColor = el.getAttribute("data-color") || "";
       render();
       return;
 
