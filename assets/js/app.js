@@ -165,7 +165,7 @@ const REPORT_META = {
     periodLabel: "작성일",
     s1: "오늘 한 일",
     s2: "내일 할 일",
-    s3: "특이사항 / 공유사항",
+    s3: "공유사항",
     progressLabel: "진행률",
   },
   weekly: {
@@ -314,7 +314,7 @@ const HELP = {
   reports: {
     title: "보고서 사용법",
     items: [
-      "【일일 보고】 오늘 한 일·내일 할 일·특이사항을 작성해요.",
+      "【일일 보고】 오늘 한 일·내일 할 일·공유사항을 작성해요. 공유사항은 빨간색으로 강조 표시돼요.",
       "  · '⚡ 자동생성'을 누르면 선택 창이 떠요. '오늘 한 일'·'내일 할 일'에 넣을 업무를 체크로 직접 고르고(기본 전체 선택, 빼고 싶은 건 해제), 상세내용까지 넣을 업무도 따로 고를 수 있어요.",
       "  · 상세를 고른 업무는 제목(-) 아래에 상세가 '•'로 한 번만 붙어요(내일 할 일은 항상 제목만).",
       "  · 작성 후 '📄 제출 양식'을 누르면 양식 미리보기가 열리고, 'PNG 이미지 저장'으로 내려받을 수 있어요.",
@@ -3346,7 +3346,7 @@ function dailyCard(r) {
       </div>
       ${r.done ? `<div class="report-row"><b>오늘 한 일</b><div>${reportRich(r.done)}</div></div>` : ""}
       ${r.todo ? `<div class="report-row"><b>내일 할 일</b><div>${reportRich(r.todo)}</div></div>` : ""}
-      ${r.note ? `<div class="report-row"><b>특이사항</b><div>${reportRich(r.note)}</div></div>` : ""}
+      ${r.note ? `<div class="report-row report-note"><b>⚠️ 공유사항</b><div>${reportRich(r.note)}</div></div>` : ""}
       <div class="report-feedback">
         <label class="fb-label">💬 피드백</label>
         <textarea class="fb-input" data-fb-id="${r.id}" rows="8" placeholder="이 보고서에 대한 피드백을 직접 입력하세요…">${UI.esc(fb)}</textarea>
@@ -3395,7 +3395,7 @@ function planCard(r) {
       ${r.progress ? progressBar(r.progress, meta.progressLabel) : ""}
       ${r.done ? `<div class="report-row"><b>${meta.s1}</b><div>${reportRich(r.done)}</div></div>` : ""}
       ${r.todo ? `<div class="report-row"><b>${meta.s2}</b><div>${reportRich(r.todo)}</div></div>` : ""}
-      ${r.note ? `<div class="report-row"><b>${meta.s3}</b><div>${reportRich(r.note)}</div></div>` : ""}
+      ${r.note ? `<div class="report-row report-note"><b>⚠️ ${meta.s3}</b><div>${reportRich(r.note)}</div></div>` : ""}
       <div class="card-actions">
         <button class="btn xs primary" data-act="report-submit" data-id="${r.id}">📄 제출 양식</button>
         <button class="btn xs ghost" data-act="report-copy" data-id="${r.id}">📋 복사</button>
@@ -3589,7 +3589,7 @@ function combinedSheetHTML(date) {
         ? `
         <div class="cmb-row"><b>오늘 한 일</b><div>${r.done ? reportRich(r.done) : "-"}</div></div>
         <div class="cmb-row"><b>내일 할 일</b><div>${r.todo ? reportRich(r.todo) : "-"}</div></div>
-        ${r.note ? `<div class="cmb-row"><b>특이사항</b><div>${reportRich(r.note)}</div></div>` : ""}`
+        ${r.note ? `<div class="cmb-row cmb-note"><b>⚠️ 공유사항</b><div>${reportRich(r.note)}</div></div>` : ""}`
         : lv
         ? `<div class="cmb-empty leave">🌴 ${UI.esc(lv)}</div>`
         : `<div class="cmb-empty">미작성</div>`;
@@ -3949,7 +3949,7 @@ async function reportForm(existing, preset) {
       { name: "date", label: "날짜", type: "date", required: true },
       { name: "done", label: "오늘 한 일", type: "textarea", rows: 5, full: true },
       { name: "todo", label: "내일 할 일", type: "textarea", rows: 4, full: true },
-      { name: "note", label: "특이사항 / 공유사항", type: "textarea", rows: 3, full: true },
+      { name: "note", label: "공유사항", type: "textarea", rows: 3, full: true },
     ],
   });
   if (!res) return;
@@ -4003,7 +4003,7 @@ function reportSheetHTML(r) {
       </div>
       <section><h3>${meta.s1}</h3><div>${r.done ? reportRich(r.done) : "-"}</div></section>
       <section><h3>${meta.s2}</h3><div>${r.todo ? reportRich(r.todo) : "-"}</div></section>
-      <section><h3>${meta.s3}</h3><div>${r.note ? reportRich(r.note) : "-"}</div></section>
+      <section class="rs-note"><h3>${meta.s3}</h3><div>${r.note ? reportRich(r.note) : "-"}</div></section>
     </div>`;
 }
 
