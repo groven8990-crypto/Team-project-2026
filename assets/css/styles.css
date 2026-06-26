@@ -407,8 +407,13 @@ a { color: inherit; }
 .cal-week { position: relative; }
 .cal-week-cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--cal-gap); }
 .cal-week-bars { position: absolute; top: 22px; left: 0; right: 0; pointer-events: none; }
-.span-bar { position: absolute; height: 18px; line-height: 18px; font-size: 11px; font-weight: 600; padding: 0 7px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; pointer-events: auto; box-sizing: border-box; }
-.span-bar:hover { filter: brightness(.97); }
+/* 타임라인 화살표 띠: 둥근 라벨 + 색선 + 화살표 */
+.span-bar { position: absolute; height: 18px; display: flex; align-items: center; cursor: pointer; pointer-events: auto; box-sizing: border-box; }
+.span-pill { flex: 0 1 auto; min-width: 0; height: 18px; line-height: 15px; border: 1.5px solid var(--c); color: var(--c); background: #fff; border-radius: 999px; padding: 0 9px; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+.span-line { flex: 1 1 auto; height: 3px; min-width: 4px; background: var(--c); border-radius: 2px; }
+.span-arrow { flex: 0 0 auto; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid var(--c); }
+.span-cap { flex: 0 0 auto; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-right: 7px solid var(--c); }
+.span-bar:hover .span-pill { filter: brightness(.96); }
 .bar-space { width: 100%; }
 .cal-cell { min-width: 0; }
 .cal-ev, .cal-ev-wrap { max-width: 100%; }
@@ -1029,7 +1034,7 @@ input[type="range"].prog-range.mini { width: 84px; min-width: 84px; }
   .cal-grid { gap: 2px; padding: 5px; }
   .cal-grid-wrap { padding: 5px; --cal-gap: 2px; }
   .cal-week-bars { top: 18px; }
-  .span-bar { padding: 0 5px; }
+  .span-pill { padding: 0 6px; font-size: 10px; }
   .cal-cell { padding: 2px; min-height: 58px; border-radius: 6px; }
   .cal-wd { font-size: 10px; padding: 3px 0; }
   .cal-daynum { font-size: 10px; margin-bottom: 1px; }

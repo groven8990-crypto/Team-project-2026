@@ -2014,15 +2014,15 @@ function paymentCalendar(year, month, payList) {
     </div>`;
 }
 
-/* 여러 날 일정 띠 색상 (파스텔) */
-function spanPalette(e) {
+/* 여러 날 일정 띠(타임라인 화살표) 색상 — 진한 단색 한 가지 */
+function spanColor(e) {
   const col = eventColor(e);
-  if (col) return { bg: mixHex(col, "#ffffff", 18), fg: mixHex(col, "#1f2937", 72) };
-  if (eventLeave(e)) return { bg: "#ccfbf1", fg: "#0f766e" };
+  if (col) return col;
+  if (eventLeave(e)) return "#0f766e";
   const s = eventScopes(e);
-  if (s.includes("month")) return { bg: "#ece7fb", fg: "#6d28d9" };
-  if (s.includes("week")) return { bg: "#fdebcb", fg: "#b45309" };
-  return { bg: "#e0e7ff", fg: "#4338ca" };
+  if (s.includes("month")) return "#7c3aed";
+  if (s.includes("week")) return "#d97706";
+  return "#3b82f6";
 }
 
 function calendarGrid(year, month, events) {
@@ -2094,13 +2094,18 @@ function calendarGrid(year, month, events) {
 
     const barsHtml = placed
       .map(({ e, sCol, eCol, lane, leftCont, rightCont }) => {
-        const { bg, fg } = spanPalette(e);
+        const c = spanColor(e);
         const span = eCol - sCol + 1;
         // 칸 사이 간격(--cal-gap)을 반영해 셀과 정확히 정렬
         const left = `calc((${sCol} * (100% - 6 * var(--cal-gap)) / 7) + ${sCol} * var(--cal-gap) + 1px)`;
         const width = `calc((${span} * (100% - 6 * var(--cal-gap)) / 7) + ${span - 1} * var(--cal-gap) - 2px)`;
         const lv = eventLeave(e);
-        return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 21}px;background:${bg};color:${fg}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">${leftCont ? "◀ " : ""}${lv ? "🌴 " : ""}${UI.esc(e.title)}${rightCont ? " ▶" : ""}</div>`;
+        // 시작 지점 둥근 라벨 + 색선 + 화살표(→)
+        return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 21}px;--c:${c}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">
+            <span class="span-pill">${lv ? "🌴 " : ""}${UI.esc(e.title)}</span>
+            <span class="span-line"></span>
+            <span class="span-arrow"></span>
+          </div>`;
       })
       .join("");
 
