@@ -2100,7 +2100,7 @@ function calendarGrid(year, month, events) {
         const left = `calc((${sCol} * (100% - 6 * var(--cal-gap)) / 7) + ${sCol} * var(--cal-gap) + 1px)`;
         const width = `calc((${span} * (100% - 6 * var(--cal-gap)) / 7) + ${span - 1} * var(--cal-gap) - 2px)`;
         const lv = eventLeave(e);
-        return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 20}px;background:${bg};color:${fg}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">${leftCont ? "◀ " : ""}${lv ? "🌴 " : ""}${UI.esc(e.title)}${rightCont ? " ▶" : ""}</div>`;
+        return `<div class="span-bar" style="left:${left};width:${width};top:${lane * 21}px;background:${bg};color:${fg}" data-act="event-edit" data-id="${e.id}" title="${UI.esc(e.title)}">${leftCont ? "◀ " : ""}${lv ? "🌴 " : ""}${UI.esc(e.title)}${rightCont ? " ▶" : ""}</div>`;
       })
       .join("");
 
@@ -2153,7 +2153,7 @@ function calendarGrid(year, month, events) {
       cellsHtml += `
         <div class="cal-cell ${ds === today ? "today" : ""} ${hol ? "holiday" : ""}" data-act="day-view" data-date="${ds}" title="클릭하면 이 날짜의 일정 전체 보기">
           <div class="cal-daynum ${dayCls}">${d}</div>
-          ${barRows ? `<div class="bar-space" style="height:${barRows * 20}px"></div>` : ""}
+          ${barRows ? `<div class="bar-space" style="height:${barRows * 21}px"></div>` : ""}
           ${hol ? `<div class="cal-holiday" title="${UI.esc(hol)}">${UI.esc(hol)}</div>` : ""}
           ${evHtml}${more}
         </div>`;
