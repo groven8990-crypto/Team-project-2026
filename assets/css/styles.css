@@ -267,15 +267,22 @@ a { color: inherit; }
 .item-row .ir-del { width: 30px; height: 30px; font-size: 13px; }
 .add-item-row { align-self: flex-start; margin-top: 2px; }
 .items-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
-.items-paste { margin-top: 6px; padding: 10px; border: 1px dashed var(--line-2); border-radius: 10px; background: var(--panel-2); display: flex; flex-direction: column; gap: 8px; }
-.items-paste-text { width: 100%; box-sizing: border-box; border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 11px; font-family: inherit; font-size: 13px; line-height: 1.5; resize: vertical; min-height: 84px; }
-.items-paste-text:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
-.items-paste-actions { display: flex; gap: 8px; }
 @media (max-width: 560px) {
   .items-head { display: none; }
   .item-row { grid-template-columns: 1fr 1fr; }
-  .items-paste-text { font-size: 16px; }
 }
+/* 이미지 붙여넣기 영역 */
+.imgpaste-zone { border: 2px dashed var(--line-2); border-radius: 10px; padding: 12px; min-height: 64px; cursor: text; outline: none; transition: border-color .15s; }
+.imgpaste-zone:focus { border-color: var(--brand); box-shadow: var(--ring); }
+.imgpaste-hint { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 0; }
+.imgpaste-hint kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-family: inherit; font-size: 12px; }
+.imgpaste-previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.imgpaste-item { position: relative; }
+.imgpaste-item img { max-width: 180px; max-height: 140px; border-radius: 6px; border: 1px solid var(--line); display: block; }
+.imgpaste-remove { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #ef4444; color: #fff; border: none; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; padding: 0; }
+/* 회의록 카드 이미지 */
+.meeting-img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); margin-top: 6px; cursor: zoom-in; display: block; }
+.meeting-img.meeting-img-zoom { max-width: none; width: 100%; cursor: zoom-out; }
 
 .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .kanban-col { background: #eef2f8; border-radius: var(--radius); padding: 12px; }

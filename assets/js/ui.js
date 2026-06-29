@@ -249,6 +249,12 @@ const UI = (function () {
               )
               .join("")}
           </div>`;
+        } else if (f.type === "imgpaste") {
+          const initImgs = Array.isArray(initial) ? initial : [];
+          html += `<div class="imgpaste-zone" id="${id}" tabindex="0">
+            <div class="imgpaste-hint">📷 이미지를 복사한 뒤 이 영역을 클릭하고 <kbd>Ctrl+V</kbd>로 붙여넣으세요</div>
+            <div class="imgpaste-previews">${initImgs.map((src, i) => `<div class="imgpaste-item"><img src="${esc(src)}"><button type="button" class="imgpaste-remove" data-idx="${i}" data-field="${esc(f.name)}">✕</button></div>`).join("")}</div>
+          </div>`;
         } else if (f.type === "items") {
           const rows = Array.isArray(initial) && initial.length ? initial : [{}];
           html += `<div class="items-editor" id="${id}">
@@ -256,14 +262,6 @@ const UI = (function () {
             ${rows.map((r) => itemRowHTML(r)).join("")}
             <div class="items-tools">
               <button type="button" class="btn ghost sm add-item-row" data-target="${id}">+ 행 추가</button>
-              <button type="button" class="btn ghost sm paste-items-toggle" data-target="${id}">📋 텍스트로 붙여넣기</button>
-            </div>
-            <div class="items-paste" hidden>
-              <textarea class="items-paste-text" rows="4" placeholder="액션아이템을 한 줄에 하나씩 붙여넣으세요.\n탭이나 | 로 칸을 나누면 담당·기한도 자동 인식돼요.\n예) 홍보물 리스트 수령 | 김수영 | 2026-06-20"></textarea>
-              <div class="items-paste-actions">
-                <button type="button" class="btn primary sm paste-items-apply" data-target="${id}">표로 변환</button>
-                <button type="button" class="btn ghost sm paste-items-cancel" data-target="${id}">닫기</button>
-              </div>
             </div>
           </div>`;
         } else {
@@ -295,6 +293,42 @@ const UI = (function () {
             reader.onload = () => {
               imageData[f.name] = reader.result;
               prev.innerHTML = `<img src="${reader.result}">`;
+            };
+            reader.readAsDataURL(file);
+          });
+        });
+
+      // 이미지 붙여넣기(imgpaste)
+      const imgPasteData = {};
+      fields
+        .filter((f) => f.type === "imgpaste")
+        .forEach((f) => {
+          const zone = form.querySelector(`#f_${f.name}`);
+          imgPasteData[f.name] = Array.isArray(values[f.name]) ? [...values[f.name]] : [];
+          const redraw = () => {
+            const previews = zone.querySelector(".imgpaste-previews");
+            const hint = zone.querySelector(".imgpaste-hint");
+            previews.innerHTML = imgPasteData[f.name]
+              .map(
+                (src, i) =>
+                  `<div class="imgpaste-item"><img src="${esc(src)}"><button type="button" class="imgpaste-remove" data-idx="${i}" data-field="${esc(f.name)}">✕</button></div>`
+              )
+              .join("");
+            hint.style.display = imgPasteData[f.name].length ? "none" : "";
+          };
+          redraw();
+          zone.addEventListener("paste", (e) => {
+            const cd = e.clipboardData;
+            if (!cd) return;
+            const imgItem = [...cd.items].find((it) => it.type.startsWith("image/"));
+            if (!imgItem) return;
+            e.preventDefault();
+            const file = imgItem.getAsFile();
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              imgPasteData[f.name].push(reader.result);
+              redraw();
             };
             reader.readAsDataURL(file);
           });
@@ -398,7 +432,7 @@ const UI = (function () {
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
-      // 안건 행 추가/삭제 + 색상 선택
+      // 안건 행 추가/삭제 + 색상 선택 + 이미지 제거
       form.addEventListener("click", (e) => {
         const add = e.target.closest(".add-item-row");
         if (add) {
@@ -406,47 +440,6 @@ const UI = (function () {
           editor
             .querySelector(".items-tools")
             .insertAdjacentHTML("beforebegin", itemRowHTML({}));
-          return;
-        }
-        // 텍스트 붙여넣기 박스 토글
-        const pt = e.target.closest(".paste-items-toggle");
-        if (pt) {
-          const editor = form.querySelector("#" + pt.getAttribute("data-target"));
-          const box = editor.querySelector(".items-paste");
-          box.hidden = !box.hidden;
-          if (!box.hidden) box.querySelector(".items-paste-text").focus();
-          return;
-        }
-        const pc = e.target.closest(".paste-items-cancel");
-        if (pc) {
-          const editor = form.querySelector("#" + pc.getAttribute("data-target"));
-          const box = editor.querySelector(".items-paste");
-          box.hidden = true;
-          box.querySelector(".items-paste-text").value = "";
-          return;
-        }
-        // 붙여넣은 텍스트 → 표 행으로 변환
-        const pa = e.target.closest(".paste-items-apply");
-        if (pa) {
-          const editor = form.querySelector("#" + pa.getAttribute("data-target"));
-          const box = editor.querySelector(".items-paste");
-          const ta = box.querySelector(".items-paste-text");
-          const parsed = parseItemsText(ta.value);
-          if (!parsed.length) {
-            toast("변환할 내용이 없어요. 텍스트를 붙여넣어 주세요", "warn");
-            return;
-          }
-          // 비어있는 기본 행은 제거 후 변환된 행 추가
-          editor.querySelectorAll(".item-row").forEach((row) => {
-            const a = row.querySelector(".ir-agenda").value.trim();
-            const o = row.querySelector(".ir-owner").value.trim();
-            if (!a && !o) row.remove();
-          });
-          const tools = editor.querySelector(".items-tools");
-          parsed.forEach((r) => tools.insertAdjacentHTML("beforebegin", itemRowHTML(r)));
-          ta.value = "";
-          box.hidden = true;
-          toast(`${parsed.length}개 항목을 표로 만들었어요`);
           return;
         }
         const del = e.target.closest(".ir-del");
@@ -459,6 +452,25 @@ const UI = (function () {
           const picker = sw.closest(".color-picker");
           picker.querySelectorAll(".swatch").forEach((s) => s.classList.remove("active"));
           sw.classList.add("active");
+          return;
+        }
+        const rm = e.target.closest(".imgpaste-remove");
+        if (rm) {
+          const fieldName = rm.getAttribute("data-field");
+          const idx = parseInt(rm.getAttribute("data-idx"), 10);
+          if (imgPasteData[fieldName]) {
+            imgPasteData[fieldName].splice(idx, 1);
+            const zone = form.querySelector(`#f_${fieldName}`);
+            const previews = zone.querySelector(".imgpaste-previews");
+            const hint = zone.querySelector(".imgpaste-hint");
+            previews.innerHTML = imgPasteData[fieldName]
+              .map(
+                (src, i) =>
+                  `<div class="imgpaste-item"><img src="${esc(src)}"><button type="button" class="imgpaste-remove" data-idx="${i}" data-field="${esc(fieldName)}">✕</button></div>`
+              )
+              .join("");
+            hint.style.display = imgPasteData[fieldName].length ? "none" : "";
+          }
         }
       });
 
@@ -521,6 +533,10 @@ const UI = (function () {
           if (f.type === "static") continue;
           if (f.type === "image") {
             out[f.name] = imageData[f.name] || "";
+            continue;
+          }
+          if (f.type === "imgpaste") {
+            out[f.name] = imgPasteData[f.name] || [];
             continue;
           }
           if (f.type === "checks") {

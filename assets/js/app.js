@@ -2887,6 +2887,26 @@ async function linkForm(existing) {
 }
 
 /* ============ 회의록 ============ */
+
+/* body 필드 인코딩: 이미지가 있으면 '__rich__:{"text":"...","imgs":[...]}' */
+function parseMeetingBody(body) {
+  if (body && body.startsWith("__rich__:")) {
+    try {
+      return JSON.parse(body.slice(9));
+    } catch (_) {}
+  }
+  return { text: body || "", imgs: [] };
+}
+
+function renderMeetingBody(body) {
+  const { text, imgs } = parseMeetingBody(body);
+  const textHtml = text ? `<div>${UI.nl2br(text)}</div>` : "";
+  const imgHtml = (imgs || [])
+    .map((src) => `<img src="${src}" class="meeting-img" onclick="this.classList.toggle('meeting-img-zoom')">`)
+    .join("");
+  return textHtml + imgHtml;
+}
+
 /* meetingId를 넘기면 '완료' 칸이 클릭 가능한 토글 버튼으로 렌더됨(카드용).
    넘기지 않으면 정적 아이콘으로 렌더(PNG 시트/캡처용). */
 function meetingItemsTable(items, meetingId) {
@@ -2929,7 +2949,7 @@ function meetingCard(m) {
       </div>
       ${meetingItemsTable(m.items, m.id)}
       ${m.agenda ? `<div class="meeting-row"><b>안건</b><div>${UI.nl2br(m.agenda)}</div></div>` : ""}
-      ${m.body ? `<div class="meeting-row"><b>내용</b><div>${UI.nl2br(m.body)}</div></div>` : ""}
+      ${m.body ? `<div class="meeting-row"><b>내용</b><div>${renderMeetingBody(m.body)}</div></div>` : ""}
       ${m.remarks ? `<div class="meeting-row"><b>비고</b><div>${UI.nl2br(m.remarks)}</div></div>` : ""}
       <div class="card-meta">작성: ${UI.memberChip(m.member_id)}</div>
       <div class="card-actions">
@@ -3085,8 +3105,14 @@ function renderMinutes() {
 }
 
 async function meetingForm(existing) {
+  const existingBody = existing ? parseMeetingBody(existing.body) : null;
   const values = existing
-    ? { ...existing, fu_status: existing.fu_status ? "yes" : "" }
+    ? {
+        ...existing,
+        body: existingBody.text,
+        bodyImages: existingBody.imgs || [],
+        fu_status: existing.fu_status ? "yes" : "",
+      }
     : {
         member_id: curUser(),
         date: UI.todayInput(),
@@ -3094,6 +3120,7 @@ async function meetingForm(existing) {
           .map((m) => m.name)
           .join(", "),
         items: [{}, {}],
+        bodyImages: [],
       };
   const res = await UI.formModal({
     title: existing ? "회의록 수정" : "회의록 작성",
@@ -3114,6 +3141,7 @@ async function meetingForm(existing) {
       { name: "attendees", label: "참석자", type: "text", full: true },
       { name: "items", label: "안건 및 결과", type: "items", full: true },
       { name: "body", label: "회의 내용 / 메모", type: "textarea", rows: 4, full: true },
+      { name: "bodyImages", label: "이미지 첨부 (클릭 후 Ctrl+V)", type: "imgpaste", full: true },
       { name: "remarks", label: "비고", type: "text", full: true },
       {
         name: "fu_status",
@@ -3128,6 +3156,12 @@ async function meetingForm(existing) {
   });
   if (!res) return;
   res.fu_status = res.fu_status === "yes";
+  // 이미지가 있으면 body에 __rich__ 인코딩
+  const imgs = res.bodyImages || [];
+  delete res.bodyImages;
+  if (imgs.length) {
+    res.body = "__rich__:" + JSON.stringify({ text: res.body || "", imgs });
+  }
   if (existing) await Store.update("meetings", existing.id, res);
   else await Store.add("meetings", res);
   UI.toast("회의록이 저장되었습니다");
