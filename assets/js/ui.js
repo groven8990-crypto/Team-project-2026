@@ -264,12 +264,16 @@ const UI = (function () {
               <button type="button" class="btn ghost sm add-item-row" data-target="${id}">+ 행 추가</button>
             </div>
           </div>`;
-        } else {
         } else if (f.type === "wordfile") {
-          html += `<div class="wordfile-field" id="${id}">
-            <label class="btn ghost sm wordfile-btn" for="${id}_input">📄 Word 파일 선택 (.docx)</label>
-            <input type="file" id="${id}_input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
-            <span class="wordfile-name muted"></span>
+          const initHtml = (typeof initial === "string" && initial.startsWith("__html__:")) ? initial.slice(9) : "";
+          html += `<div class="wordfile-field" id="${id}" data-html="${esc(initHtml)}">
+            <div class="wordfile-controls">
+              <label class="btn ghost sm wordfile-btn" for="${id}_input">📄 Word 파일 선택 (.docx)</label>
+              <input type="file" id="${id}_input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
+              <span class="wordfile-name muted">${initHtml ? "✅ 기존 Word 내용 로드됨" : ""}</span>
+              <button type="button" class="btn ghost sm wordfile-clear" style="display:${initHtml ? "" : "none"}">✕ 초기화</button>
+            </div>
+            <div class="wordfile-preview" ${initHtml ? "" : "hidden"}>${initHtml}</div>
           </div>`;
         } else {
           const t = f.type === "date" ? "date" : f.type === "url" ? "url" : "text";
@@ -282,13 +286,29 @@ const UI = (function () {
         inputs[f.name] = f;
       });
 
-      // Word 파일(.docx) → 텍스트 추출 후 target 필드에 채우기
+      // Word 파일(.docx) → HTML 변환 (표 포함) 후 미리보기 + submit 시 target 필드 주입
       fields
         .filter((f) => f.type === "wordfile")
         .forEach((f) => {
           const wrap = form.querySelector(`#f_${f.name}`);
           const input = wrap.querySelector(`#f_${f.name}_input`);
           const nameEl = wrap.querySelector(".wordfile-name");
+          const clearBtn = wrap.querySelector(".wordfile-clear");
+          const preview = wrap.querySelector(".wordfile-preview");
+          const targetEl = f.target ? form.querySelector(`#f_${f.target}`) : null;
+
+          // 기존 Word 내용이 있으면 target textarea 숨김
+          if (wrap.dataset.html && targetEl) targetEl.closest(".field").style.display = "none";
+
+          const setHtml = (html, label) => {
+            wrap.dataset.html = html;
+            preview.innerHTML = html;
+            preview.hidden = !html;
+            nameEl.textContent = label;
+            clearBtn.style.display = html ? "" : "none";
+            if (targetEl) targetEl.closest(".field").style.display = html ? "none" : "";
+          };
+
           input.addEventListener("change", async () => {
             const file = input.files[0];
             if (!file) return;
@@ -300,18 +320,17 @@ const UI = (function () {
                 return;
               }
               const arrayBuffer = await file.arrayBuffer();
-              const result = await mammoth.extractRawText({ arrayBuffer });
-              const targetEl = f.target ? form.querySelector(`#f_${f.target}`) : null;
-              if (targetEl) {
-                targetEl.value = result.value.trim();
-                nameEl.textContent = `✅ ${file.name} 불러옴`;
-              } else {
-                nameEl.textContent = `✅ ${file.name}`;
-              }
+              const result = await mammoth.convertToHtml({ arrayBuffer });
+              setHtml(result.value, `✅ ${file.name} 불러옴`);
             } catch (_) {
               toast("Word 파일을 읽을 수 없습니다", "error");
               nameEl.textContent = "";
             }
+          });
+
+          clearBtn.addEventListener("click", () => {
+            setHtml("", "");
+            input.value = "";
           });
         });
 
@@ -571,7 +590,16 @@ const UI = (function () {
         const out = {};
         for (const f of fields) {
           if (f.type === "static") continue;
-          if (f.type === "wordfile") continue;
+          if (f.type === "wordfile") {
+            // Word HTML이 있으면 target 필드 값을 __html__: 인코딩으로 덮어쓴다
+            const wrap = form.querySelector(`#f_${f.name}`);
+            const html = wrap ? wrap.dataset.html || "" : "";
+            if (html && f.target) {
+              const targetEl = form.querySelector(`#f_${f.target}`);
+              if (targetEl) targetEl.value = "__html__:" + html;
+            }
+            continue;
+          }
           if (f.type === "image") {
             out[f.name] = imageData[f.name] || "";
             continue;

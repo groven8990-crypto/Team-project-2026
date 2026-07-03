@@ -2888,18 +2888,30 @@ async function linkForm(existing) {
 
 /* ============ 회의록 ============ */
 
-/* body 필드 인코딩: 이미지가 있으면 '__rich__:{"text":"...","imgs":[...]}' */
+/* body 필드 인코딩:
+   - '__html__:<HTML>'      : Word에서 불러온 HTML (표 포함)
+   - '__rich__:{"text":"...","imgs":[...]}' : 텍스트 + 붙여넣기 이미지 */
 function parseMeetingBody(body) {
-  if (body && body.startsWith("__rich__:")) {
+  if (!body) return { text: "", imgs: [], html: "" };
+  if (body.startsWith("__html__:")) return { text: "", imgs: [], html: body.slice(9) };
+  if (body.startsWith("__rich__:")) {
     try {
-      return JSON.parse(body.slice(9));
+      const d = JSON.parse(body.slice(9));
+      return { text: d.text || "", imgs: d.imgs || [], html: "" };
     } catch (_) {}
   }
-  return { text: body || "", imgs: [] };
+  return { text: body, imgs: [], html: "" };
 }
 
 function renderMeetingBody(body) {
-  const { text, imgs } = parseMeetingBody(body);
+  const { text, imgs, html } = parseMeetingBody(body);
+  if (html) {
+    // Word에서 불러온 HTML (표 포함)
+    const imgHtml = (imgs || [])
+      .map((src) => `<img src="${src}" class="meeting-img" onclick="this.classList.toggle('meeting-img-zoom')">`)
+      .join("");
+    return `<div class="meeting-html">${html}</div>${imgHtml}`;
+  }
   const textHtml = text ? `<div>${UI.nl2br(text)}</div>` : "";
   const imgHtml = (imgs || [])
     .map((src) => `<img src="${src}" class="meeting-img" onclick="this.classList.toggle('meeting-img-zoom')">`)
@@ -3111,6 +3123,7 @@ async function meetingForm(existing) {
         ...existing,
         body: existingBody.text,
         bodyImages: existingBody.imgs || [],
+        bodyDoc: existingBody.html ? `__html__:${existingBody.html}` : "",
         fu_status: existing.fu_status ? "yes" : "",
       }
     : {
@@ -3160,7 +3173,10 @@ async function meetingForm(existing) {
   // 이미지가 있으면 body에 __rich__ 인코딩
   const imgs = res.bodyImages || [];
   delete res.bodyImages;
-  if (imgs.length) {
+  // body가 __html__:이면 이미지도 있을 때만 rich로 합침 (현재는 html만 유지)
+  if (res.body && res.body.startsWith("__html__:")) {
+    // Word HTML 모드: 이미지는 추후 지원, html 그대로 유지
+  } else if (imgs.length) {
     res.body = "__rich__:" + JSON.stringify({ text: res.body || "", imgs });
   }
   if (existing) await Store.update("meetings", existing.id, res);
