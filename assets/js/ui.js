@@ -265,6 +265,13 @@ const UI = (function () {
             </div>
           </div>`;
         } else {
+        } else if (f.type === "wordfile") {
+          html += `<div class="wordfile-field" id="${id}">
+            <label class="btn ghost sm wordfile-btn" for="${id}_input">📄 Word 파일 선택 (.docx)</label>
+            <input type="file" id="${id}_input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
+            <span class="wordfile-name muted"></span>
+          </div>`;
+        } else {
           const t = f.type === "date" ? "date" : f.type === "url" ? "url" : "text";
           html += `<input id="${id}" name="${f.name}" type="${t}" placeholder="${esc(
             f.placeholder || ""
@@ -274,6 +281,39 @@ const UI = (function () {
         form.appendChild(wrap);
         inputs[f.name] = f;
       });
+
+      // Word 파일(.docx) → 텍스트 추출 후 target 필드에 채우기
+      fields
+        .filter((f) => f.type === "wordfile")
+        .forEach((f) => {
+          const wrap = form.querySelector(`#f_${f.name}`);
+          const input = wrap.querySelector(`#f_${f.name}_input`);
+          const nameEl = wrap.querySelector(".wordfile-name");
+          input.addEventListener("change", async () => {
+            const file = input.files[0];
+            if (!file) return;
+            nameEl.textContent = "읽는 중…";
+            try {
+              if (typeof mammoth === "undefined") {
+                toast("Word 파서가 아직 로딩 중이에요. 잠시 후 다시 시도하세요", "warn");
+                nameEl.textContent = "";
+                return;
+              }
+              const arrayBuffer = await file.arrayBuffer();
+              const result = await mammoth.extractRawText({ arrayBuffer });
+              const targetEl = f.target ? form.querySelector(`#f_${f.target}`) : null;
+              if (targetEl) {
+                targetEl.value = result.value.trim();
+                nameEl.textContent = `✅ ${file.name} 불러옴`;
+              } else {
+                nameEl.textContent = `✅ ${file.name}`;
+              }
+            } catch (_) {
+              toast("Word 파일을 읽을 수 없습니다", "error");
+              nameEl.textContent = "";
+            }
+          });
+        });
 
       // 이미지 미리보기 + base64 저장
       const imageData = {};
@@ -531,6 +571,7 @@ const UI = (function () {
         const out = {};
         for (const f of fields) {
           if (f.type === "static") continue;
+          if (f.type === "wordfile") continue;
           if (f.type === "image") {
             out[f.name] = imageData[f.name] || "";
             continue;

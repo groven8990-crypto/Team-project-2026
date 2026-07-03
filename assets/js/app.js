@@ -3140,6 +3140,7 @@ async function meetingForm(existing) {
       },
       { name: "attendees", label: "참석자", type: "text", full: true },
       { name: "items", label: "안건 및 결과", type: "items", full: true },
+      { name: "bodyDoc", label: "Word 파일에서 내용 가져오기 (.docx)", type: "wordfile", target: "body", full: true },
       { name: "body", label: "회의 내용 / 메모", type: "textarea", rows: 4, full: true },
       { name: "bodyImages", label: "이미지 첨부 (클릭 후 Ctrl+V)", type: "imgpaste", full: true },
       { name: "remarks", label: "비고", type: "text", full: true },

@@ -271,6 +271,10 @@ a { color: inherit; }
   .items-head { display: none; }
   .item-row { grid-template-columns: 1fr 1fr; }
 }
+/* Word 파일 불러오기 */
+.wordfile-field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wordfile-btn { cursor: pointer; }
+.wordfile-name { font-size: 13px; }
 /* 이미지 붙여넣기 영역 */
 .imgpaste-zone { border: 2px dashed var(--line-2); border-radius: 10px; padding: 12px; min-height: 64px; cursor: text; outline: none; transition: border-color .15s; }
 .imgpaste-zone:focus { border-color: var(--brand); box-shadow: var(--ring); }
