@@ -320,7 +320,12 @@ const UI = (function () {
                 return;
               }
               const arrayBuffer = await file.arrayBuffer();
-              const result = await mammoth.convertToHtml({ arrayBuffer });
+              const result = await mammoth.convertToHtml({
+                arrayBuffer,
+                convertImage: mammoth.images.imgElement((img) =>
+                  img.read("base64").then((b64) => ({ src: `data:${img.contentType};base64,${b64}` }))
+                ),
+              });
               setHtml(result.value, `✅ ${file.name} 불러옴`);
             } catch (_) {
               toast("Word 파일을 읽을 수 없습니다", "error");
