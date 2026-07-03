@@ -252,7 +252,7 @@ const UI = (function () {
         } else if (f.type === "imgpaste") {
           const initImgs = Array.isArray(initial) ? initial : [];
           html += `<div class="imgpaste-zone" id="${id}" tabindex="0">
-            <div class="imgpaste-hint">📷 이미지를 복사한 뒤 이 영역을 클릭하고 <kbd>Ctrl+V</kbd>로 붙여넣으세요</div>
+            <div class="imgpaste-hint">📷 이미지를 드래그하거나, 클릭 후 <kbd>Ctrl+V</kbd>로 붙여넣으세요</div>
             <div class="imgpaste-previews">${initImgs.map((src, i) => `<div class="imgpaste-item"><img src="${esc(src)}"><button type="button" class="imgpaste-remove" data-idx="${i}" data-field="${esc(f.name)}">✕</button></div>`).join("")}</div>
           </div>`;
         } else if (f.type === "items") {

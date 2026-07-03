@@ -3042,7 +3042,7 @@ function meetingSheetHTML(m) {
       <div class="rs-meta">${metaRows}</div>
       <section><h3>${UI.esc(m.title)}</h3>${itemsTable || ""}</section>
       ${m.agenda ? `<section><h3>안건</h3><div>${UI.nl2br(m.agenda)}</div></section>` : ""}
-      ${m.body ? `<section><h3>내용</h3><div>${UI.nl2br(m.body)}</div></section>` : ""}
+      ${m.body ? `<section><h3>내용</h3><div>${renderMeetingBody(m.body)}</div></section>` : ""}
       ${m.remarks ? `<section><h3>비고</h3><div>${UI.nl2br(m.remarks)}</div></section>` : ""}
     </div>`;
 }
@@ -3065,7 +3065,13 @@ function meetingToText(m) {
     );
   }
   if (m.agenda) lines.push(`\n[안건]\n${m.agenda}`);
-  if (m.body) lines.push(`\n[내용]\n${m.body}`);
+  if (m.body) {
+    const { text, html } = parseMeetingBody(m.body);
+    const bodyText = html
+      ? html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+      : text;
+    if (bodyText) lines.push(`\n[내용]\n${bodyText}`);
+  }
   if (m.remarks) lines.push(`\n[비고]\n${m.remarks}`);
   return lines.join("\n");
 }
