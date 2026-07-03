@@ -283,9 +283,11 @@ a { color: inherit; }
 .wordfile-preview { margin-top: 8px; padding: 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel-2); max-height: 280px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
 /* 회의록 카드 Word HTML 렌더링 */
 .meeting-html { font-size: 13px; line-height: 1.7; }
-.meeting-html table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12.5px; }
-.meeting-html th, .meeting-html td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
-.meeting-html th { background: var(--panel-2); font-weight: 700; }
+.meeting-html table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12.5px; table-layout: auto; }
+.meeting-html th, .meeting-html td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; word-break: keep-all; }
+.meeting-html th { background: var(--panel-2); font-weight: 700; white-space: nowrap; }
+/* 담당·기한처럼 짧은 값이 들어가는 뒤쪽 열은 줄바꿈 방지 */
+.meeting-html td:nth-child(3), .meeting-html td:nth-child(4) { white-space: nowrap; width: 1%; }
 .meeting-html p { margin: 0 0 4px; }
 .meeting-html ul, .meeting-html ol { margin: 4px 0 4px 18px; padding: 0; }
 .meeting-html strong, .meeting-html b { font-weight: 700; }
@@ -500,9 +502,10 @@ a { color: inherit; }
 .meeting-fields b { color: var(--muted); font-size: 11px; margin-right: 4px; font-weight: 700; }
 .meeting-items { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
 .meeting-items th { background: #f8fafc; color: var(--muted); font-size: 11px; font-weight: 800; padding: 8px; border: 1px solid var(--line); }
-.meeting-items td { padding: 8px; border: 1px solid var(--line); }
+.meeting-items td { padding: 8px; border: 1px solid var(--line); word-break: keep-all; }
 .meeting-items td.ta-c { text-align: center; }
 .meeting-items td.nowrap { white-space: nowrap; }
+.meeting-items td:nth-child(3) { white-space: nowrap; width: 1%; }
 .meeting-items tr.done td { color: var(--muted); text-decoration: line-through; }
 .meeting-items tr.done td.ta-c:first-child { text-decoration: none; }
 .mi-check {
