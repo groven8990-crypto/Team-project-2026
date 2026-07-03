@@ -267,11 +267,15 @@ const UI = (function () {
         } else if (f.type === "wordfile") {
           const initHtml = (typeof initial === "string" && initial.startsWith("__html__:")) ? initial.slice(9) : "";
           html += `<div class="wordfile-field" id="${id}" data-html="${esc(initHtml)}">
-            <div class="wordfile-controls">
-              <label class="btn ghost sm wordfile-btn" for="${id}_input">📄 Word 파일 선택 (.docx)</label>
+            <div class="wordfile-drop" id="${id}_drop" style="${initHtml ? "display:none" : ""}">
               <input type="file" id="${id}_input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
+              <div class="wf-drop-icon">📄</div>
+              <div class="wf-drop-text">Word 파일을 여기에 드래그하세요</div>
+              <div class="wf-drop-sub">또는 클릭해서 파일 선택 · .docx만 지원</div>
+            </div>
+            <div class="wordfile-loaded" style="${initHtml ? "" : "display:none"}">
               <span class="wordfile-name muted">${initHtml ? "✅ 기존 Word 내용 로드됨" : ""}</span>
-              <button type="button" class="btn ghost sm wordfile-clear" style="display:${initHtml ? "" : "none"}">✕ 초기화</button>
+              <button type="button" class="btn ghost sm wordfile-clear">✕ 초기화</button>
             </div>
             <div class="wordfile-preview" ${initHtml ? "" : "hidden"}>${initHtml}</div>
           </div>`;
@@ -286,18 +290,19 @@ const UI = (function () {
         inputs[f.name] = f;
       });
 
-      // Word 파일(.docx) → HTML 변환 (표 포함) 후 미리보기 + submit 시 target 필드 주입
+      // Word 파일(.docx) → HTML 변환 (표+이미지 포함) — 드래그앤드롭 + 클릭 선택
       fields
         .filter((f) => f.type === "wordfile")
         .forEach((f) => {
           const wrap = form.querySelector(`#f_${f.name}`);
+          const dropZone = wrap.querySelector(`#f_${f.name}_drop`);
           const input = wrap.querySelector(`#f_${f.name}_input`);
           const nameEl = wrap.querySelector(".wordfile-name");
+          const loadedBar = wrap.querySelector(".wordfile-loaded");
           const clearBtn = wrap.querySelector(".wordfile-clear");
           const preview = wrap.querySelector(".wordfile-preview");
           const targetEl = f.target ? form.querySelector(`#f_${f.target}`) : null;
 
-          // 기존 Word 내용이 있으면 target textarea 숨김
           if (wrap.dataset.html && targetEl) targetEl.closest(".field").style.display = "none";
 
           const setHtml = (html, label) => {
@@ -305,18 +310,24 @@ const UI = (function () {
             preview.innerHTML = html;
             preview.hidden = !html;
             nameEl.textContent = label;
-            clearBtn.style.display = html ? "" : "none";
+            dropZone.style.display = html ? "none" : "";
+            loadedBar.style.display = html ? "" : "none";
             if (targetEl) targetEl.closest(".field").style.display = html ? "none" : "";
           };
 
-          input.addEventListener("change", async () => {
-            const file = input.files[0];
-            if (!file) return;
+          const processFile = async (file) => {
+            if (!file || !file.name.match(/\.docx$/i)) {
+              toast(".docx 파일만 지원합니다", "warn");
+              return;
+            }
             nameEl.textContent = "읽는 중…";
+            loadedBar.style.display = "";
+            dropZone.style.display = "none";
             try {
               if (typeof mammoth === "undefined") {
                 toast("Word 파서가 아직 로딩 중이에요. 잠시 후 다시 시도하세요", "warn");
-                nameEl.textContent = "";
+                loadedBar.style.display = "none";
+                dropZone.style.display = "";
                 return;
               }
               const arrayBuffer = await file.arrayBuffer();
@@ -326,13 +337,32 @@ const UI = (function () {
                   img.read("base64").then((b64) => ({ src: `data:${img.contentType};base64,${b64}` }))
                 ),
               });
-              setHtml(result.value, `✅ ${file.name} 불러옴`);
+              setHtml(result.value, `✅ ${file.name}`);
             } catch (_) {
               toast("Word 파일을 읽을 수 없습니다", "error");
-              nameEl.textContent = "";
+              setHtml("", "");
             }
+          };
+
+          // 클릭 → 파일 다이얼로그
+          dropZone.addEventListener("click", () => input.click());
+          input.addEventListener("change", () => processFile(input.files[0]));
+
+          // 드래그앤드롭
+          dropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            dropZone.classList.add("drag-over");
+          });
+          dropZone.addEventListener("dragleave", (e) => {
+            if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove("drag-over");
+          });
+          dropZone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropZone.classList.remove("drag-over");
+            processFile(e.dataTransfer.files[0]);
           });
 
+          // 초기화
           clearBtn.addEventListener("click", () => {
             setHtml("", "");
             input.value = "";
@@ -381,20 +411,36 @@ const UI = (function () {
             hint.style.display = imgPasteData[f.name].length ? "none" : "";
           };
           redraw();
+
+          const addImageFile = (file) => {
+            if (!file || !file.type.startsWith("image/")) return;
+            const reader = new FileReader();
+            reader.onload = () => { imgPasteData[f.name].push(reader.result); redraw(); };
+            reader.readAsDataURL(file);
+          };
+
+          // Ctrl+V 붙여넣기
           zone.addEventListener("paste", (e) => {
             const cd = e.clipboardData;
             if (!cd) return;
             const imgItem = [...cd.items].find((it) => it.type.startsWith("image/"));
             if (!imgItem) return;
             e.preventDefault();
-            const file = imgItem.getAsFile();
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => {
-              imgPasteData[f.name].push(reader.result);
-              redraw();
-            };
-            reader.readAsDataURL(file);
+            addImageFile(imgItem.getAsFile());
+          });
+
+          // 드래그앤드롭
+          zone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            zone.classList.add("drag-over");
+          });
+          zone.addEventListener("dragleave", (e) => {
+            if (!zone.contains(e.relatedTarget)) zone.classList.remove("drag-over");
+          });
+          zone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            zone.classList.remove("drag-over");
+            [...e.dataTransfer.files].forEach(addImageFile);
           });
         });
 
