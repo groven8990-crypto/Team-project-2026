@@ -282,16 +282,15 @@ a { color: inherit; }
 .wordfile-name { font-size: 13px; }
 .wordfile-preview { margin-top: 8px; padding: 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel-2); max-height: 280px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
 /* 회의록 카드 Word HTML 렌더링 */
-.meeting-html { font-size: 13px; line-height: 1.7; }
-.meeting-html table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12.5px; table-layout: auto; }
-.meeting-html th, .meeting-html td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; word-break: keep-all; }
-.meeting-html th { background: var(--panel-2); font-weight: 700; white-space: nowrap; }
-/* 담당·기한처럼 짧은 값이 들어가는 뒤쪽 열은 줄바꿈 방지 */
-.meeting-html td:nth-child(3), .meeting-html td:nth-child(4) { white-space: nowrap; width: 1%; }
+.meeting-html { font-size: 13px; line-height: 1.7; overflow-x: auto; max-width: 100%; }
+.meeting-html table { border-collapse: collapse; width: 100% !important; max-width: 100% !important; margin: 8px 0; font-size: 12.5px; table-layout: fixed; }
+.meeting-html th, .meeting-html td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; word-break: keep-all; overflow-wrap: break-word; }
+.meeting-html th { background: var(--panel-2); font-weight: 700; }
 .meeting-html p { margin: 0 0 4px; }
 .meeting-html ul, .meeting-html ol { margin: 4px 0 4px 18px; padding: 0; }
 .meeting-html strong, .meeting-html b { font-weight: 700; }
 .meeting-html h1, .meeting-html h2, .meeting-html h3 { margin: 8px 0 4px; font-size: 14px; font-weight: 700; }
+.meeting-html img { max-width: 100%; height: auto; }
 /* 이미지 붙여넣기 영역 */
 .imgpaste-zone { border: 2px dashed var(--line-2); border-radius: 10px; padding: 12px; min-height: 64px; cursor: default; outline: none; transition: border-color .15s, background .15s; }
 .imgpaste-zone:focus, .imgpaste-zone.drag-over { border-color: var(--brand); box-shadow: var(--ring); }
@@ -706,7 +705,7 @@ a { color: inherit; }
 /* ===== 제출용 보고서 양식 ===== */
 .report-modal { max-width: 640px; }
 .report-preview-body { display: block !important; }
-.report-sheet { font-size: 13.5px; color: var(--ink); }
+.report-sheet { font-size: 13.5px; color: var(--ink); max-width: 100%; overflow-x: hidden; }
 .report-sheet h1 { text-align: center; font-size: 21px; font-weight: 800; margin: 4px 0 18px; letter-spacing: -0.5px; }
 .rs-meta { display: flex; border: 1px solid var(--line-2); border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 18px; }
 .rs-meta > div { flex: 1; display: flex; align-items: stretch; }

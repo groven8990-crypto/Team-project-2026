@@ -4124,6 +4124,8 @@ async function downloadSheetPNG(sheetEl, filename, btn) {
       backgroundColor: "#ffffff",
       scale: Math.min(window.devicePixelRatio || 1, 2) * 1.5,
       useCORS: true,
+      width: sheetEl.offsetWidth,   // 넘친 영역 제외, 표시된 너비만 캡처
+      windowWidth: sheetEl.offsetWidth,
     });
     const link = document.createElement("a");
     link.download = (filename || "보고서") + ".png";
