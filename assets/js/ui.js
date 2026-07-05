@@ -290,6 +290,21 @@ const UI = (function () {
         inputs[f.name] = f;
       });
 
+      // Word HTML 후처리: colgroup/col 제거 + 인라인 width 속성 제거
+      function cleanWordHtml(html) {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        doc.querySelectorAll("colgroup, col").forEach((el) => el.remove());
+        doc.querySelectorAll("table, tr, td, th").forEach((el) => {
+          el.removeAttribute("width");
+          el.removeAttribute("height");
+          el.style.removeProperty("width");
+          el.style.removeProperty("height");
+          el.style.removeProperty("min-width");
+          el.style.removeProperty("max-width");
+        });
+        return doc.body.innerHTML;
+      }
+
       // Word 파일(.docx) → HTML 변환 (표+이미지 포함) — 드래그앤드롭 + 클릭 선택
       fields
         .filter((f) => f.type === "wordfile")
@@ -337,7 +352,7 @@ const UI = (function () {
                   img.read("base64").then((b64) => ({ src: `data:${img.contentType};base64,${b64}` }))
                 ),
               });
-              setHtml(result.value, `✅ ${file.name}`);
+              setHtml(cleanWordHtml(result.value), `✅ ${file.name}`);
             } catch (_) {
               toast("Word 파일을 읽을 수 없습니다", "error");
               setHtml("", "");
