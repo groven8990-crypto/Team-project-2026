@@ -1,5 +1,5 @@
-const CACHE = "ventus-hub-v20261112b";
-const SHELL = ["./", "index.html", "hub.css?v=20261112b", "hub.js?v=20261112b", "manifest.webmanifest", "icons/icon-192.png"];
+const CACHE = "ventus-hub-v20261112c";
+const SHELL = ["./", "index.html", "hub.css?v=20261112c", "hub.js?v=20261112c", "manifest.webmanifest", "icons/icon-192.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

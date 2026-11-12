@@ -347,7 +347,7 @@ function taskBtn(t, cover) {
   </button>`;
 }
 function kakaoBanner() {
-  if (DEMO || meObj()?.kakao_at) return "";
+  if (DEMO || meObj()?.kakao_at || setting("kakao_ready") !== 1) return "";
   return `<div class="banner kakao"><span>📩 ${isAdmin() ? "매일 17:50 팀 기록 현황을 카톡으로 받아 보세요." : "평일 17:50에 기록이 없으면 카톡으로 알려 드려요."}</span><button class="btn kakao-btn" data-act="kakao-connect">카톡 알림 받기</button></div>`;
 }
 function kakaoLine() {
