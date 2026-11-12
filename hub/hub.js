@@ -132,6 +132,7 @@ function demoBackend() {
     async insert(t, row) { const r = { ...row, id: nextId(t), created_at: new Date().toISOString() }; db[t].push(r); save(); return { ...r }; },
     async update(t, id, patch) { const r = db[t].find((x) => x.id === id); Object.assign(r, patch, { updated_at: new Date().toISOString() }); save(); return { ...r }; },
     async remove(t, id) { db[t] = db[t].filter((x) => x.id !== id); save(); },
+    async kakao() { throw new Error("체험 모드에서는 카톡 연결을 할 수 없어요"); },
     subscribe() {},
   };
 }
@@ -157,6 +158,15 @@ function supabaseBackend() {
     async insert(t, row) { return chk(await sb.from(t).insert(row).select().single()); },
     async update(t, id, patch) { return chk(await sb.from(t).update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id).select().single()); },
     async remove(t, id) { chk(await sb.from(t).delete().eq("id", id)); },
+    async kakao(action, body = {}) {
+      const { data, error } = await sb.functions.invoke("hub-kakao", { body: { action, ...body } });
+      if (error) {
+        let msg = error.message;
+        try { msg = (await error.context.json()).error || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      return data;
+    },
     subscribe(onChange) {
       sb.channel("hub-changes")
         .on("postgres_changes", { event: "*", schema: "public" }, (p) => { if (p.table && p.table.startsWith("hub_")) onChange(p.table); })
@@ -336,6 +346,14 @@ function taskBtn(t, cover) {
     <span class="tb-meta">${lg ? `✓ ${lg.count}건 · ${fmtMin(lg.minutes)}` : `약 ${t.est_min}분`}</span>
   </button>`;
 }
+function kakaoBanner() {
+  if (DEMO || meObj()?.kakao_at) return "";
+  return `<div class="banner kakao"><span>📩 ${isAdmin() ? "매일 17:50 팀 기록 현황을 카톡으로 받아 보세요." : "평일 17:50에 기록이 없으면 카톡으로 알려 드려요."}</span><button class="btn kakao-btn" data-act="kakao-connect">카톡 알림 받기</button></div>`;
+}
+function kakaoLine() {
+  if (DEMO || !meObj()?.kakao_at) return "";
+  return `<p class="kakao-line">🔔 카톡 알림 연결됨 · <button class="btn link" data-act="kakao-test">시험 발송</button> · <button class="btn link" data-act="kakao-off">끄기</button></p>`;
+}
 function viewToday() {
   const me = meObj();
   const t0 = today();
@@ -362,6 +380,7 @@ function viewToday() {
       <button class="btn ${leave ? "warn" : ""}" data-act="leave">${leave ? `🌴 ${esc(leave.kind)}` : "🌴 연차"}</button>
     </div>
   </div>
+  ${kakaoBanner()}
   ${leave ? `<div class="banner">이날은 <b>${esc(leave.kind)}</b>로 표시됐어요. 미기록으로 세지 않아요. <button class="btn link" data-act="leave">바꾸기</button></div>` : ""}
   <p class="hint">업무를 누르면 건수·시간이 미리 채워져요. 다를 때만 고치고 저장하세요.</p>
   ${groups.filter(([, ts]) => ts.length).map(([label, ts]) => `
@@ -378,6 +397,7 @@ function viewToday() {
     <h3 class="card-h">${S.date === t0 ? "오늘" : fmtShort(S.date)} 기록한 것</h3>
     ${logs.length ? `<ul class="log-list">${logs.sort((a, b) => a.id - b.id).map((l) => logRow(l, true)).join("")}</ul>` : `<p class="muted">아직 없어요. 위의 업무 버튼을 눌러 주세요.</p>`}
   </section>
+  ${kakaoLine()}
   <p class="notice">${NOTICE}</p>`;
 }
 function logRow(l, editable, showWho) {
@@ -569,6 +589,7 @@ function viewBoard() {
   const prevMemos = S.hub_weekly.filter((w) => w.week_start < ws).sort((a, b) => b.week_start.localeCompare(a.week_start));
   const reqs = [...S.hub_requests].sort((a, b) => Number(a.done) - Number(b.done) || b.id - a.id);
   return `
+  ${isAdmin() ? kakaoBanner() + kakaoLine() : ""}
   <section class="today-cards">${staff().map((m) => { const s = statusOf(m.name, t0); return `
     <div class="card pcard ${s.k}"><div class="pc-name"><i class="who-dot" style="background:${esc(m.color)}"></i>${esc(m.name)}</div>
     <div class="pc-stat">${s.k === "ok" ? `${s.t} · ${fmtMin(s.m)}` : s.k === "leave" ? `🌴 ${esc(s.t)}` : s.k === "miss" ? "오늘 아직 미기록" : "휴일"}</div></div>`; }).join("")}</section>
@@ -753,6 +774,16 @@ document.addEventListener("click", async (e) => {
     case "weekly": sheetWeekly(); break;
     case "req-done": { const r = S.hub_requests.find((x) => x.id === Number(el.dataset.id)); try { await save("hub_requests", r.id, { done: !r.done }); renderView(); } catch (err) { fail(err); } break; }
     case "excel": exportExcel(); break;
+    case "kakao-connect":
+      try { el.disabled = true; const { url } = await DB.kakao("authorize_url", { member: S.me }); location.href = url; } catch (err) { el.disabled = false; toast(err.message, true); }
+      break;
+    case "kakao-test":
+      try { await DB.kakao("test", { member: S.me }); toast("시험 알림을 보냈어요. 카톡을 확인해 보세요"); } catch (err) { toast(err.message, true); }
+      break;
+    case "kakao-off":
+      if (!confirm("카톡 알림을 끌까요?")) break;
+      try { await DB.kakao("disconnect", { member: S.me }); upsertLocal("hub_members", { ...meObj(), kakao_at: null }); renderView(); toast("카톡 알림을 껐어요"); } catch (err) { toast(err.message, true); }
+      break;
   }
 });
 document.addEventListener("input", (e) => { if (e.target.name === "minutes") e.target.form.dataset.touched = "1"; if (e.target.name === "count") { const f = e.target.form; if (!f.dataset.touched) f.elements.minutes.value = Number(f.dataset.est) * Math.max(1, Number(e.target.value) || 1); } });
@@ -801,8 +832,29 @@ async function start() {
   S.view = NAV.some((n) => n.id === h) ? h : isAdmin() ? "board" : "today";
   renderShell();
 }
+async function kakaoCallback(q) {
+  history.replaceState(null, "", location.pathname + location.hash);
+  $("#app").innerHTML = `<div class="gate"><img src="icons/icon-192.png" alt="" class="gate-logo"><h1>카톡 알림 연결 중…</h1></div>`;
+  if (q.get("error")) return `카카오 연결을 취소했어요.`;
+  try { const r = await DB.kakao("connect", { code: q.get("code"), state: q.get("state") }); return { ok: r.member }; } catch (e) { return e.message; }
+}
 async function boot() {
   try {
+    const q = new URLSearchParams(location.search);
+    if (q.get("state") && (q.get("code") || q.get("error"))) {
+      const res = await kakaoCallback(q);
+      const signed = await DB.signedIn();
+      if (res && res.ok) {
+        if (!signed) {
+          $("#app").innerHTML = `<div class="gate"><img src="icons/icon-192.png" alt="" class="gate-logo"><h1>✅ 연결됐어요!</h1><p class="muted">${esc(res.ok)} 님 카톡으로 확인 메시지를 보냈어요.<br>이 창을 닫고 업무허브 앱으로 돌아가세요.</p></div>`;
+          return;
+        }
+        setTimeout(() => toast("카톡 알림이 연결됐어요! 카톡을 확인해 보세요"), 300);
+      } else {
+        if (!signed) { $("#app").innerHTML = `<div class="gate"><h1>연결하지 못했어요</h1><p class="muted">${esc(res)}</p><p class="muted">업무허브 앱에서 다시 눌러 주세요.</p></div>`; return; }
+        setTimeout(() => toast(res, true), 300);
+      }
+    }
     if (!(await DB.signedIn())) return renderLogin();
     await start();
   } catch (e) {

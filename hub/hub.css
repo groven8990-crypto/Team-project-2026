@@ -263,3 +263,7 @@ td.st.none { color: #aab; }
   .toast { bottom: 28px; }
   .today-cards { grid-template-columns: repeat(3, 1fr); }
 }
+
+.banner.kakao { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: #fff8d6; border-color: #f3e08a; color: #4a3d00; }
+.kakao-btn { background: #fee500; border-color: #fee500; color: #191919; }
+.kakao-line { margin: 0; text-align: center; font-size: 13px; color: var(--sub); }
